@@ -207,13 +207,23 @@ async function loadHistory() {
     const div = document.createElement("div");
     div.className = "history-entry";
     div.innerHTML = `
-      <div class="history-meta">
-        <span class="history-site">${entry.siteId}</span>
-        <span class="history-date">${dateStr}</span>
+      <div class="history-summary">
+        <div class="history-meta">
+          <span class="history-site">${entry.siteId}</span>
+          <span class="history-date">${dateStr}</span>
+        </div>
+        <div class="history-prompt">${promptSnippet}</div>
+        <div class="history-words">${entry.wordCount} words · click to read</div>
       </div>
-      <div class="history-prompt">${promptSnippet}</div>
-      <div class="history-words">${entry.wordCount} words</div>
+      <div class="history-detail hidden">
+        <div class="history-full-prompt"><strong>Prompt:</strong> ${escapeHtml(entry.prompt)}</div>
+        <div class="history-full-text">${escapeHtml(entry.text || "")}</div>
+      </div>
     `;
+    div.querySelector(".history-summary").addEventListener("click", () => {
+      div.querySelector(".history-detail").classList.toggle("hidden");
+      div.classList.toggle("expanded");
+    });
     list.appendChild(div);
   });
 }
@@ -245,6 +255,14 @@ async function loadStats() {
     row.innerHTML = `<span class="name">${site}</span><span class="count">${count}</span>`;
     siteStatsList.appendChild(row);
   });
+}
+
+// --- Helpers ---
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 // --- Init ---
