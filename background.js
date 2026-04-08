@@ -387,7 +387,7 @@ async function handleMessage(message, sender) {
         }
         emergency.usedThisWeek++;
         await saveEmergencyUnlocks(emergency);
-        await updateAnalytics({ siteToggled: siteId });
+        await updateAnalytics({ siteToggled: siteId, emergency: siteId });
       }
 
       site.enabled = enabled;
