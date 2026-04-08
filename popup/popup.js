@@ -318,6 +318,24 @@ async function loadStats() {
     row.innerHTML = `<span class="name">${site}</span><span class="count">${count}</span>`;
     siteStatsList.appendChild(row);
   });
+
+  // Emergency unlocks by site
+  const emergencyStatsList = document.getElementById("emergencyStatsList");
+  emergencyStatsList.innerHTML = "";
+
+  const emergencyEntries = Object.entries(analytics.emergencyUnlocksBySite || {}).sort((a, b) => b[1] - a[1]);
+
+  if (emergencyEntries.length === 0) {
+    document.getElementById("emergencyStatsSection").style.display = "none";
+  } else {
+    document.getElementById("emergencyStatsSection").style.display = "block";
+    emergencyEntries.forEach(([site, count]) => {
+      const row = document.createElement("div");
+      row.className = "site-stat-row";
+      row.innerHTML = `<span class="name">${site}</span><span class="count">${count}</span>`;
+      emergencyStatsList.appendChild(row);
+    });
+  }
 }
 
 // --- Helpers ---
