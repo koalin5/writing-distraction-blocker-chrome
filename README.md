@@ -7,8 +7,9 @@ A Chrome extension that blocks social media sites and makes you complete a writi
 1. **Sites are blocked by default.** Navigate to any blocked site and you'll see a block screen instead.
 2. **Write to unlock.** To access a blocked site, complete a writing exercise — a random creative prompt with a word minimum you choose (50, 100, 200, 500, or 750 words).
 3. **One visit per period.** The day is split into four 6-hour windows (12am–6am, 6am–12pm, 12pm–6pm, 6pm–12am). You get one unlock per site per window. Close the tab or navigate away and it's blocked again until the next window.
-4. **Anti-cheat.** No pasting, no drag-and-drop, no single-letter spam. The extension validates that you're writing real words with reasonable variety.
-5. **Emergency bypass.** For genuinely urgent situations, you get 3 emergency unlocks per week (configurable) that skip the writing requirement.
+4. **Unlock-all mode (optional).** By default, you write one exercise per site. Turn on "Unlock all sites with one exercise" in settings, and a single writing exercise unlocks every blocked site for the current period. You still get only one visit per site — it just saves you from writing multiple exercises.
+5. **Anti-cheat.** No pasting, no drag-and-drop, no single-letter spam. The extension validates that you're writing real words with reasonable variety.
+6. **Emergency bypass.** For genuinely urgent situations, you get 3 emergency unlocks per week (configurable) that skip the writing requirement.
 
 ## Pre-Blocked Sites
 
@@ -73,6 +74,8 @@ Shows your current state at a glance:
 ### Settings Tab
 
 **Word Minimum** — How many words you must write to unlock a site. Options: 50, 100, 200 (default), 500, or 750. Lower values are good for getting started; higher values force deeper writing. This applies to all future writing exercises immediately.
+
+**Unlock All Sites with One Exercise** — Off by default. When enabled, completing a single writing exercise unlocks every blocked site for the current 6-hour period. Each site still allows only one visit (close the tab and it's blocked again), but you don't have to write separate exercises for each one. Good if you block many sites but don't want to write five different essays just to check your feeds.
 
 **Emergency Unlocks per Week** — How many times you can bypass the writing requirement per week (resets every Monday). Default is 3. Set to 0 if you want no escape hatch.
 

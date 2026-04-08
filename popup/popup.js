@@ -67,6 +67,9 @@ async function loadSettings() {
     input.checked = parseInt(input.value) === settings.wordMinimum;
   });
 
+  // Unlock all mode
+  document.getElementById("unlockAllToggle").checked = settings.unlockAllMode || false;
+
   // Emergency limit
   document.getElementById("emergencyLimit").value = settings.emergencyUnlocksPerWeek;
 
@@ -103,6 +106,13 @@ document.getElementById("wordMinGroup").addEventListener("change", async (e) => 
       wordMinimum: parseInt(e.target.value),
     });
   }
+});
+
+document.getElementById("unlockAllToggle").addEventListener("change", async (e) => {
+  await chrome.runtime.sendMessage({
+    action: "updateSettings",
+    unlockAllMode: e.target.checked,
+  });
 });
 
 document.getElementById("emergencyLimit").addEventListener("change", async (e) => {

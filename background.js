@@ -153,12 +153,27 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   const unlockState = await getUnlockState();
+  const settings = await getSettings();
+
   for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
+    // Claim unclaimed tabs (unlock-all mode: tabId is null until first visit)
+    if (info.tabId === null && changeInfo.url) {
+      const site = settings.blockedSites.find(s => s.id === siteId);
+      if (site && urlMatchesSite(changeInfo.url, site)) {
+        unlockState.unlockedSites[siteId] = { tabId, unlockedAt: info.unlockedAt };
+        await saveUnlockState(unlockState);
+        if (changeInfo.status === "complete" || !changeInfo.status) {
+          injectExitWarning(tabId);
+        }
+        return;
+      }
+      continue;
+    }
+
     if (info.tabId !== tabId) continue;
 
     // If URL changed, check if they navigated away from the unlocked site
     if (changeInfo.url) {
-      const settings = await getSettings();
       const site = settings.blockedSites.find(s => s.id === siteId);
       if (site && !urlMatchesSite(changeInfo.url, site)) {
         await addSiteBlockingRule(siteId);
@@ -205,6 +220,7 @@ async function handleMessage(message, sender) {
     case "unlockSite": {
       const { siteId, tabId } = message;
       await ensurePeriodState();
+      const settings = await getSettings();
       const unlockState = await getUnlockState();
 
       // Check if already used this period
@@ -212,15 +228,26 @@ async function handleMessage(message, sender) {
         return { error: "alreadyUsedThisPeriod" };
       }
 
-      // Save unlock state first (defensive against service worker kill)
-      unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
-      await saveUnlockState(unlockState);
-
-      // Then remove the blocking rule
-      await removeSiteBlockingRule(siteId);
-
-      // Update analytics
-      await updateAnalytics({ unlock: siteId });
+      if (settings.unlockAllMode) {
+        // Unlock ALL enabled sites for this period (still one tab visit each)
+        const enabledSites = settings.blockedSites.filter(s => s.enabled);
+        for (const site of enabledSites) {
+          if (!unlockState.unlockedSites[site.id] && !unlockState.usedSitesThisPeriod[site.id]) {
+            unlockState.unlockedSites[site.id] = { tabId: null, unlockedAt: Date.now() };
+            await removeSiteBlockingRule(site.id);
+            await updateAnalytics({ unlock: site.id });
+          }
+        }
+        // Set the requesting site's tab for tracking
+        unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
+        await saveUnlockState(unlockState);
+      } else {
+        // Standard mode: unlock only the requested site
+        unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
+        await saveUnlockState(unlockState);
+        await removeSiteBlockingRule(siteId);
+        await updateAnalytics({ unlock: siteId });
+      }
 
       return { success: true };
     }
@@ -245,6 +272,16 @@ async function handleMessage(message, sender) {
       await removeSiteBlockingRule(siteId);
       await updateAnalytics({ unlock: siteId, emergency: siteId });
 
+      return { success: true };
+    }
+
+    case "claimTab": {
+      const { siteId, tabId } = message;
+      const unlockState = await getUnlockState();
+      if (unlockState.unlockedSites[siteId]) {
+        unlockState.unlockedSites[siteId].tabId = tabId;
+        await saveUnlockState(unlockState);
+      }
       return { success: true };
     }
 
@@ -292,10 +329,11 @@ async function handleMessage(message, sender) {
     }
 
     case "updateSettings": {
-      const { wordMinimum, emergencyUnlocksPerWeek } = message;
+      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode } = message;
       const settings = await getSettings();
       if (wordMinimum !== undefined) settings.wordMinimum = wordMinimum;
       if (emergencyUnlocksPerWeek !== undefined) settings.emergencyUnlocksPerWeek = emergencyUnlocksPerWeek;
+      if (unlockAllMode !== undefined) settings.unlockAllMode = unlockAllMode;
       await saveSettings(settings);
       return { success: true };
     }

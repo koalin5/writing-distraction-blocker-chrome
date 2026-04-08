@@ -26,6 +26,23 @@ async function loadState() {
     unlockBtn.disabled = true;
     unlockBtn.textContent = "Already unlocked this period";
   } else if (state.unlockState.unlockedSites[siteId]) {
+    const info = state.unlockState.unlockedSites[siteId];
+    if (info.tabId === null) {
+      // Unlock-all mode: site is unlocked but no tab claimed yet — let them through
+      document.getElementById("periodStatus").textContent =
+        "This site is unlocked for this period. Click below to visit.";
+      unlockBtn.textContent = "Go to site";
+      unlockBtn.addEventListener("click", async () => {
+        const currentTab = await chrome.tabs.getCurrent();
+        await chrome.runtime.sendMessage({
+          action: "claimTab",
+          siteId,
+          tabId: currentTab.id,
+        });
+        window.location.href = `https://${domain}`;
+      }, { once: true });
+      return; // skip the default unlock click handler
+    }
     document.getElementById("periodStatus").textContent =
       "This site is currently unlocked in another tab.";
     unlockBtn.disabled = true;

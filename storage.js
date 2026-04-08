@@ -20,6 +20,7 @@ const DEFAULT_BLOCKED_SITES = [
 const DEFAULT_SETTINGS = {
   wordMinimum: 200,
   emergencyUnlocksPerWeek: 3,
+  unlockAllMode: false, // When true, one writing exercise unlocks ALL blocked sites for the period
   blockedSites: DEFAULT_BLOCKED_SITES,
 };
 
