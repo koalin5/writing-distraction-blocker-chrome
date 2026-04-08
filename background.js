@@ -109,12 +109,20 @@ function schedulePeriodAlarm() {
 
 // --- Warning Injection ---
 
-async function injectExitWarning(tabId) {
+async function injectContentScripts(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["content-warning.js"],
+      files: ["content-warning.js", "content-nudge.js"],
     });
+    // Send nudge timer config after scripts are injected
+    const settings = await getSettings();
+    if (settings.nudgeMinutes > 0) {
+      chrome.tabs.sendMessage(tabId, {
+        action: "startNudgeTimer",
+        nudgeMinutes: settings.nudgeMinutes,
+      });
+    }
   } catch {
     // Tab may not be ready yet — we'll retry via onUpdated
   }
@@ -163,7 +171,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         unlockState.unlockedSites[siteId] = { tabId, unlockedAt: info.unlockedAt };
         await saveUnlockState(unlockState);
         if (changeInfo.status === "complete" || !changeInfo.status) {
-          injectExitWarning(tabId);
+          injectContentScripts(tabId);
         }
         return;
       }
@@ -186,7 +194,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
     // Inject exit warning once the page finishes loading
     if (changeInfo.status === "complete") {
-      injectExitWarning(tabId);
+      injectContentScripts(tabId);
     }
     break;
   }
@@ -329,11 +337,12 @@ async function handleMessage(message, sender) {
     }
 
     case "updateSettings": {
-      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode } = message;
+      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode, nudgeMinutes } = message;
       const settings = await getSettings();
       if (wordMinimum !== undefined) settings.wordMinimum = wordMinimum;
       if (emergencyUnlocksPerWeek !== undefined) settings.emergencyUnlocksPerWeek = emergencyUnlocksPerWeek;
       if (unlockAllMode !== undefined) settings.unlockAllMode = unlockAllMode;
+      if (nudgeMinutes !== undefined) settings.nudgeMinutes = nudgeMinutes;
       await saveSettings(settings);
       return { success: true };
     }

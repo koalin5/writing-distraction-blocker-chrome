@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS = {
   wordMinimum: 200,
   emergencyUnlocksPerWeek: 3,
   unlockAllMode: false, // When true, one writing exercise unlocks ALL blocked sites for the period
+  nudgeMinutes: 10, // Minutes before showing a "you've been here a while" nudge (0 = disabled)
   blockedSites: DEFAULT_BLOCKED_SITES,
 };
 

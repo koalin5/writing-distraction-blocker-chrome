@@ -77,6 +77,8 @@ Shows your current state at a glance:
 
 **Unlock All Sites with One Exercise** — Off by default. When enabled, completing a single writing exercise unlocks every blocked site for the current 6-hour period. Each site still allows only one visit (close the tab and it's blocked again), but you don't have to write separate exercises for each one. Good if you block many sites but don't want to write five different essays just to check your feeds.
 
+**Time Nudge** — After you've been on an unlocked site for this many minutes, a gentle pop-up reminder appears suggesting you think about closing it. Default is 10 minutes. You can dismiss it and keep browsing — it's a nudge, not a block. Set to 0 to disable.
+
 **Emergency Unlocks per Week** — How many times you can bypass the writing requirement per week (resets every Monday). Default is 3. Set to 0 if you want no escape hatch.
 
 **Site Management** — Every site in your block list is shown here with controls:

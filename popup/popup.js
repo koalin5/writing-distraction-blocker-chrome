@@ -70,6 +70,9 @@ async function loadSettings() {
   // Unlock all mode
   document.getElementById("unlockAllToggle").checked = settings.unlockAllMode || false;
 
+  // Nudge minutes
+  document.getElementById("nudgeMinutes").value = settings.nudgeMinutes ?? 10;
+
   // Emergency limit
   document.getElementById("emergencyLimit").value = settings.emergencyUnlocksPerWeek;
 
@@ -112,6 +115,13 @@ document.getElementById("unlockAllToggle").addEventListener("change", async (e) 
   await chrome.runtime.sendMessage({
     action: "updateSettings",
     unlockAllMode: e.target.checked,
+  });
+});
+
+document.getElementById("nudgeMinutes").addEventListener("change", async (e) => {
+  await chrome.runtime.sendMessage({
+    action: "updateSettings",
+    nudgeMinutes: Math.max(0, parseInt(e.target.value) || 0),
   });
 });
 
