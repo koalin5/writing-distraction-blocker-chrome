@@ -298,8 +298,6 @@ async function loadStats() {
   document.getElementById("statTotalWriting").textContent = analytics.totalWritingExercises || 0;
   document.getElementById("statTotalWords").textContent = (analytics.totalWordsWritten || 0).toLocaleString();
   document.getElementById("statEmergency").textContent = analytics.totalEmergencyUnlocks || 0;
-  document.getElementById("statToggles").textContent = analytics.totalSiteToggles || 0;
-  document.getElementById("statRemovals").textContent = analytics.totalSiteRemovals || 0;
 
   const siteStatsList = document.getElementById("siteStatsList");
   siteStatsList.innerHTML = "";
@@ -336,6 +334,44 @@ async function loadStats() {
       emergencyStatsList.appendChild(row);
     });
   }
+
+  // Sites disabled (by site, with count)
+  renderHistorySection(
+    "disabledStatsSection", "disabledStatsList",
+    analytics.siteToggleHistory || []
+  );
+
+  // Sites removed (by site, with count)
+  renderHistorySection(
+    "removedStatsSection", "removedStatsList",
+    analytics.siteRemovalHistory || []
+  );
+}
+
+function renderHistorySection(sectionId, listId, history) {
+  const list = document.getElementById(listId);
+  list.innerHTML = "";
+
+  if (!history.length) {
+    document.getElementById(sectionId).style.display = "none";
+    return;
+  }
+
+  // Aggregate by siteId
+  const counts = {};
+  history.forEach(entry => {
+    counts[entry.siteId] = (counts[entry.siteId] || 0) + 1;
+  });
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  document.getElementById(sectionId).style.display = "block";
+  sorted.forEach(([site, count]) => {
+    const row = document.createElement("div");
+    row.className = "site-stat-row";
+    row.innerHTML = `<span class="name">${site}</span><span class="count">${count}</span>`;
+    list.appendChild(row);
+  });
 }
 
 // --- Helpers ---
