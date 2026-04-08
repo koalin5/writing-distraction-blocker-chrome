@@ -29,11 +29,40 @@ You can add or remove sites through the extension popup settings.
 
 ## Installation
 
-### From Source (Manual)
+### With Claude Code (Recommended)
+
+If you use [Claude Code](https://claude.ai/claude-code), you can set this up in seconds.
+
+1. Make sure Claude Code is installed and running.
+
+2. Navigate to where you want the project:
+   ```
+   cd ~/Desktop
+   ```
+
+3. Ask Claude Code:
+   ```
+   Clone https://github.com/koalin5/writing-distraction-blocker-chrome.git
+   and walk me through installing it as a Chrome extension.
+   ```
+
+4. Claude Code will clone the repo and guide you through loading it in Chrome. It can also help you customize the blocked sites list, adjust the word minimum, add new writing prompts, or modify any behavior.
+
+**Common things to ask Claude Code after setup:**
+- "Add example.com to the blocked sites list"
+- "Change the default word minimum to 100"
+- "Add 20 new writing prompts about technology"
+- "Make the writing page font larger"
+
+> **Note:** The extension must still be loaded manually through `chrome://extensions` — no CLI tool can do that step for you. Claude Code handles everything up to that point.
+
+See [manual instructions](#manual-installation) below if you prefer to do it yourself.
+
+### Manual Installation
 
 1. Clone or download this repository:
    ```
-   git clone https://github.com/your-username/social-blocker-chrome-ext.git
+   git clone https://github.com/koalin5/writing-distraction-blocker-chrome.git
    ```
 
 2. Open Chrome and go to `chrome://extensions`
@@ -42,7 +71,7 @@ You can add or remove sites through the extension popup settings.
 
 4. Click **Load unpacked**
 
-5. Select the `social-blocker-chrome-ext` folder (the one containing `manifest.json`)
+5. Select the `writing-distraction-blocker-chrome` folder (the one containing `manifest.json`)
 
 6. The extension icon appears in your toolbar. Click it to open the popup and configure settings.
 
@@ -116,6 +145,7 @@ social-blocker-chrome-ext/
 ├── storage.js              # Storage helpers and default configuration
 ├── prompts.js              # 135 writing prompts
 ├── content-warning.js      # Injected script for exit confirmation dialog
+├── content-nudge.js        # Injected script for time-on-site nudge
 ├── blocked/
 │   ├── blocked.html        # Page shown when visiting a blocked site
 │   ├── blocked.js
@@ -133,33 +163,6 @@ social-blocker-chrome-ext/
     ├── icon48.png
     └── icon128.png
 ```
-
-## Setting Up with Claude Code
-
-If you use [Claude Code](https://claude.ai/claude-code), you can clone and install this extension directly from your terminal.
-
-1. Make sure Claude Code is installed and running.
-
-2. Navigate to where you want the project:
-   ```
-   cd ~/Desktop
-   ```
-
-3. Ask Claude Code:
-   ```
-   Clone https://github.com/your-username/social-blocker-chrome-ext.git
-   and walk me through installing it as a Chrome extension.
-   ```
-
-4. Claude Code will clone the repo and give you step-by-step instructions to load it in Chrome. It can also help you customize the blocked sites list, adjust the word minimum, add new writing prompts, or modify any behavior.
-
-**Common things to ask Claude Code after setup:**
-- "Add example.com to the blocked sites list"
-- "Change the default word minimum to 100"
-- "Add 20 new writing prompts about technology"
-- "Make the writing page font larger"
-
-Note: The Chrome extension must still be loaded manually through `chrome://extensions` — no CLI tool can do that step for you. Claude Code handles everything up to that point.
 
 ## Technical Details
 
