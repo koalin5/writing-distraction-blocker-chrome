@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Blocker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <!-- Header -->
+    <div class="header">
+      <h1>Social Blocker</h1>
+      <div class="period-badge" id="periodBadge">—</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="history">History</button>
+      <button class="tab" data-tab="stats">Stats</button>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="section">
+        <div class="info-row">
+          <span class="info-label">Emergency unlocks</span>
+          <span class="info-value" id="emergencyRemaining">—</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Blocked Sites</h3>
+        <div id="sitesList" class="sites-list"></div>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-content" id="tab-settings">
+      <div class="section">
+        <h3>Word Minimum</h3>
+        <div class="radio-group" id="wordMinGroup">
+          <label><input type="radio" name="wordMin" value="200"> 200 words</label>
+          <label><input type="radio" name="wordMin" value="500"> 500 words</label>
+          <label><input type="radio" name="wordMin" value="750"> 750 words</label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Emergency Unlocks per Week</h3>
+        <div class="inline-input">
+          <input type="number" id="emergencyLimit" min="0" max="20" value="3">
+          <span class="input-hint">per week</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Manage Sites</h3>
+        <div id="manageSitesList" class="manage-sites-list"></div>
+
+        <div class="add-site">
+          <input type="text" id="newSiteDomain" placeholder="example.com">
+          <button id="addSiteBtn" class="btn btn-small">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Tab -->
+    <div class="tab-content" id="tab-history">
+      <div id="historyList" class="history-list">
+        <p class="empty-state">No writing exercises completed yet.</p>
+      </div>
+    </div>
+
+    <!-- Stats Tab -->
+    <div class="tab-content" id="tab-stats">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalUnlocks">0</div>
+          <div class="stat-label">Total Unlocks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalWriting">0</div>
+          <div class="stat-label">Exercises Done</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalWords">0</div>
+          <div class="stat-label">Words Written</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statEmergency">0</div>
+          <div class="stat-label">Emergency Unlocks</div>
+        </div>
+      </div>
+
+      <div class="section" id="siteStatsSection">
+        <h3>Unlocks by Site</h3>
+        <div id="siteStatsList" class="site-stats-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

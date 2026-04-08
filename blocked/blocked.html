@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Site Blocked — Social Blocker</title>
+  <link rel="stylesheet" href="blocked.css">
+</head>
+<body>
+  <div class="container">
+    <div class="icon-block">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="28" stroke="#e74c3c" stroke-width="4" fill="none"/>
+        <line x1="12" y1="12" x2="52" y2="52" stroke="#e74c3c" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <h1><span id="siteName">This site</span> is blocked</h1>
+
+    <div class="period-info">
+      <p>Current period: <strong id="periodLabel">—</strong></p>
+      <p id="periodStatus"></p>
+    </div>
+
+    <div class="actions">
+      <button id="unlockBtn" class="btn btn-primary">
+        Unlock with Writing Exercise
+      </button>
+
+      <button id="emergencyBtn" class="btn btn-secondary">
+        Emergency Unlock <span id="emergencyCount" class="badge"></span>
+      </button>
+    </div>
+
+    <p id="errorMsg" class="error hidden"></p>
+  </div>
+
+  <script src="blocked.js"></script>
+</body>
+</html>

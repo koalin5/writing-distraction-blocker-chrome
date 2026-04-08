@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Writing Exercise — Social Blocker</title>
+  <link rel="stylesheet" href="writing.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-top">
+        <h1>Writing Exercise</h1>
+        <p class="subtitle">Complete this to unlock <strong id="siteName"></strong></p>
+      </div>
+      <button id="backBtn" class="btn-back">Cancel</button>
+    </header>
+
+    <div class="prompt-card">
+      <span class="prompt-label">Your Prompt</span>
+      <p id="promptText"></p>
+    </div>
+
+    <div class="editor-area">
+      <textarea
+        id="writingArea"
+        placeholder="Start writing here... (pasting is disabled)"
+        spellcheck="true"
+      ></textarea>
+
+      <div class="editor-footer">
+        <div class="word-count">
+          <span id="currentWords">0</span> / <span id="requiredWords">200</span> words
+        </div>
+        <div id="progressBar" class="progress-bar">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <p id="warningMsg" class="warning hidden"></p>
+    <p id="errorMsg" class="error hidden"></p>
+
+    <button id="submitBtn" class="btn btn-primary" disabled>
+      Submit &amp; Unlock
+    </button>
+  </div>
+
+  <script src="../prompts.js"></script>
+  <script src="writing.js"></script>
+</body>
+</html>
