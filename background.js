@@ -68,7 +68,9 @@ async function addSiteBlockingRule(siteId) {
   if (index === -1) return;
   const site = settings.blockedSites[index];
   const rules = buildRulesForSite(site, index);
+  const removeRuleIds = rules.map(r => r.id);
   await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds,
     addRules: rules,
   });
 }
