@@ -364,9 +364,12 @@ async function handleMessage(message, sender) {
     case "removeSite": {
       const { siteId } = message;
       const settings = await getSettings();
+      const site = settings.blockedSites.find(s => s.id === siteId);
+      const siteLabel = site ? site.label : siteId;
       settings.blockedSites = settings.blockedSites.filter(s => s.id !== siteId);
       await saveSettings(settings);
       await createAllBlockingRules();
+      await updateAnalytics({ siteRemoved: siteId });
       return { success: true };
     }
 
@@ -374,11 +377,22 @@ async function handleMessage(message, sender) {
       const { siteId, enabled } = message;
       const settings = await getSettings();
       const site = settings.blockedSites.find(s => s.id === siteId);
-      if (site) {
-        site.enabled = enabled;
-        await saveSettings(settings);
-        await createAllBlockingRules();
+      if (!site) return { success: true };
+
+      if (!enabled) {
+        // Disabling costs an emergency unlock
+        const emergency = await getEmergencyUnlocks();
+        if (emergency.usedThisWeek >= settings.emergencyUnlocksPerWeek) {
+          return { error: "noEmergencyUnlocksRemaining" };
+        }
+        emergency.usedThisWeek++;
+        await saveEmergencyUnlocks(emergency);
+        await updateAnalytics({ siteToggled: siteId });
       }
+
+      site.enabled = enabled;
+      await saveSettings(settings);
+      await createAllBlockingRules();
       return { success: true };
     }
 

@@ -105,6 +105,10 @@ async function getAnalytics() {
     totalWordsWritten: 0,
     totalEmergencyUnlocks: 0,
     emergencyUnlocksBySite: {},
+    totalSiteToggles: 0,
+    siteToggleHistory: [],
+    totalSiteRemovals: 0,
+    siteRemovalHistory: [],
   };
 }
 
@@ -121,6 +125,16 @@ async function updateAnalytics(deltas) {
   if (deltas.emergency) {
     analytics.totalEmergencyUnlocks++;
     analytics.emergencyUnlocksBySite[deltas.emergency] = (analytics.emergencyUnlocksBySite[deltas.emergency] || 0) + 1;
+  }
+  if (deltas.siteToggled) {
+    analytics.totalSiteToggles = (analytics.totalSiteToggles || 0) + 1;
+    if (!analytics.siteToggleHistory) analytics.siteToggleHistory = [];
+    analytics.siteToggleHistory.push({ siteId: deltas.siteToggled, date: Date.now() });
+  }
+  if (deltas.siteRemoved) {
+    analytics.totalSiteRemovals = (analytics.totalSiteRemovals || 0) + 1;
+    if (!analytics.siteRemovalHistory) analytics.siteRemovalHistory = [];
+    analytics.siteRemovalHistory.push({ siteId: deltas.siteRemoved, date: Date.now() });
   }
   await chrome.storage.local.set({ analytics });
 }
