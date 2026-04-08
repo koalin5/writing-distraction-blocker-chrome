@@ -33,6 +33,10 @@ async function loadDashboard() {
     const row = document.createElement("div");
     row.className = "site-row";
 
+    const limit = state.settings.visitsPerPeriod;
+    const visitCount = state.unlockState.usedSitesThisPeriod[site.id] || 0;
+    const exhausted = limit > 0 && visitCount >= limit;
+
     let statusClass, statusText;
     if (!site.enabled) {
       statusClass = "disabled";
@@ -40,9 +44,12 @@ async function loadDashboard() {
     } else if (state.unlockState.unlockedSites[site.id]) {
       statusClass = "unlocked";
       statusText = "Unlocked";
-    } else if (state.unlockState.usedSitesThisPeriod[site.id]) {
+    } else if (visitCount > 0 && exhausted) {
       statusClass = "used";
-      statusText = "Used";
+      statusText = limit === 1 ? "Used" : `${visitCount}/${limit} used`;
+    } else if (visitCount > 0 && !exhausted) {
+      statusClass = "unlocked";
+      statusText = limit === 0 ? `${visitCount} visits` : `${visitCount}/${limit} visits`;
     } else {
       statusClass = "blocked";
       statusText = "Blocked";
@@ -69,6 +76,12 @@ async function loadSettings() {
 
   // Unlock all mode
   document.getElementById("unlockAllToggle").checked = settings.unlockAllMode || false;
+
+  // Visits per period
+  const visitsVal = settings.visitsPerPeriod ?? 1;
+  document.querySelectorAll('input[name="visits"]').forEach(input => {
+    input.checked = parseInt(input.value) === visitsVal;
+  });
 
   // Nudge minutes
   document.getElementById("nudgeMinutes").value = settings.nudgeMinutes ?? 10;
@@ -116,6 +129,15 @@ document.getElementById("unlockAllToggle").addEventListener("change", async (e) 
     action: "updateSettings",
     unlockAllMode: e.target.checked,
   });
+});
+
+document.getElementById("visitsGroup").addEventListener("change", async (e) => {
+  if (e.target.name === "visits") {
+    await chrome.runtime.sendMessage({
+      action: "updateSettings",
+      visitsPerPeriod: parseInt(e.target.value),
+    });
+  }
 });
 
 document.getElementById("nudgeMinutes").addEventListener("change", async (e) => {

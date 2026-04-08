@@ -24,9 +24,12 @@ async function init() {
   requiredWords = state.settings.wordMinimum;
   requiredWordsEl.textContent = requiredWords;
 
-  // Check if already used this period
-  if (state.unlockState.usedSitesThisPeriod[siteId]) {
-    showError("You already unlocked this site during this period.");
+  // Check if already exhausted visits this period
+  const visitCount = state.unlockState.usedSitesThisPeriod[siteId] || 0;
+  const limit = state.settings.visitsPerPeriod;
+  const exhausted = limit > 0 && visitCount >= limit;
+  if (exhausted) {
+    showError("You've used all your visits for this site during this period.");
     writingArea.disabled = true;
     submitBtn.disabled = true;
     return;

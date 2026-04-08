@@ -128,6 +128,31 @@ async function injectContentScripts(tabId) {
   }
 }
 
+// --- Visit Tracking ---
+
+async function handleSiteClose(siteId, unlockState) {
+  const settings = await getSettings();
+  const limit = settings.visitsPerPeriod; // 1, 3, or 0 (unlimited)
+  const visitCount = (unlockState.usedSitesThisPeriod[siteId] || 0) + 1;
+  unlockState.usedSitesThisPeriod[siteId] = visitCount;
+
+  if (limit === 0 || visitCount < limit) {
+    // Visits remain — keep the rule removed so the site stays accessible
+    // (rule was already removed when originally unlocked)
+    // But we do need to re-add the rule so the blocked page shows on next visit,
+    // then immediately let them through. Actually, simpler: leave the rule removed
+    // so they can freely navigate. No tab tracking needed until they visit again.
+    // We just need to re-track when they open the site next time.
+    // Leave blocking rule removed — site stays open for this period.
+    await saveUnlockState(unlockState);
+  } else {
+    // All visits used — re-block the site
+    unlockState.usedSitesThisPeriod[siteId] = visitCount;
+    await addSiteBlockingRule(siteId);
+    await saveUnlockState(unlockState);
+  }
+}
+
 // --- Tab Tracking ---
 
 function getDomainFromUrl(url) {
@@ -150,10 +175,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   const unlockState = await getUnlockState();
   for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
     if (info.tabId === tabId) {
-      await addSiteBlockingRule(siteId);
-      unlockState.usedSitesThisPeriod[siteId] = true;
       delete unlockState.unlockedSites[siteId];
-      await saveUnlockState(unlockState);
+      await handleSiteClose(siteId, unlockState);
       break;
     }
   }
@@ -184,10 +207,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.url) {
       const site = settings.blockedSites.find(s => s.id === siteId);
       if (site && !urlMatchesSite(changeInfo.url, site)) {
-        await addSiteBlockingRule(siteId);
-        unlockState.usedSitesThisPeriod[siteId] = true;
         delete unlockState.unlockedSites[siteId];
-        await saveUnlockState(unlockState);
+        await handleSiteClose(siteId, unlockState);
         return;
       }
     }
@@ -197,6 +218,24 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       injectContentScripts(tabId);
     }
     break;
+  }
+
+  // Multi-visit re-tracking: if a tab navigates to a site that has visits remaining
+  // (not currently in unlockedSites but rule is removed), re-track it
+  if (changeInfo.url && !Object.values(unlockState.unlockedSites).some(i => i.tabId === tabId)) {
+    const limit = settings.visitsPerPeriod;
+    for (const site of settings.blockedSites) {
+      if (!site.enabled) continue;
+      const visitCount = unlockState.usedSitesThisPeriod[site.id];
+      if (visitCount && (limit === 0 || visitCount < limit) && urlMatchesSite(changeInfo.url, site)) {
+        unlockState.unlockedSites[site.id] = { tabId, unlockedAt: Date.now() };
+        await saveUnlockState(unlockState);
+        if (changeInfo.status === "complete") {
+          injectContentScripts(tabId);
+        }
+        break;
+      }
+    }
   }
 });
 
@@ -231,16 +270,21 @@ async function handleMessage(message, sender) {
       const settings = await getSettings();
       const unlockState = await getUnlockState();
 
-      // Check if already used this period
-      if (unlockState.usedSitesThisPeriod[siteId]) {
+      // Check if already used this period (respect multi-visit setting)
+      const visitCount = unlockState.usedSitesThisPeriod[siteId] || 0;
+      const limit = settings.visitsPerPeriod;
+      const exhausted = limit > 0 && visitCount >= limit;
+      if (exhausted) {
         return { error: "alreadyUsedThisPeriod" };
       }
 
       if (settings.unlockAllMode) {
-        // Unlock ALL enabled sites for this period (still one tab visit each)
+        // Unlock ALL enabled sites for this period
         const enabledSites = settings.blockedSites.filter(s => s.enabled);
         for (const site of enabledSites) {
-          if (!unlockState.unlockedSites[site.id] && !unlockState.usedSitesThisPeriod[site.id]) {
+          const siteVisits = unlockState.usedSitesThisPeriod[site.id] || 0;
+          const siteExhausted = limit > 0 && siteVisits >= limit;
+          if (!unlockState.unlockedSites[site.id] && !siteExhausted) {
             unlockState.unlockedSites[site.id] = { tabId: null, unlockedAt: Date.now() };
             await removeSiteBlockingRule(site.id);
             await updateAnalytics({ unlock: site.id });
@@ -337,12 +381,13 @@ async function handleMessage(message, sender) {
     }
 
     case "updateSettings": {
-      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode, nudgeMinutes } = message;
+      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode, nudgeMinutes, visitsPerPeriod } = message;
       const settings = await getSettings();
       if (wordMinimum !== undefined) settings.wordMinimum = wordMinimum;
       if (emergencyUnlocksPerWeek !== undefined) settings.emergencyUnlocksPerWeek = emergencyUnlocksPerWeek;
       if (unlockAllMode !== undefined) settings.unlockAllMode = unlockAllMode;
       if (nudgeMinutes !== undefined) settings.nudgeMinutes = nudgeMinutes;
+      if (visitsPerPeriod !== undefined) settings.visitsPerPeriod = visitsPerPeriod;
       await saveSettings(settings);
       return { success: true };
     }

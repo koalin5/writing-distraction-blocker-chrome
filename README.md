@@ -104,7 +104,9 @@ Shows your current state at a glance:
 
 **Word Minimum** — How many words you must write to unlock a site. Options: 50, 100, 200 (default), 500, or 750. Lower values are good for getting started; higher values force deeper writing. This applies to all future writing exercises immediately.
 
-**Unlock All Sites with One Exercise** — Off by default. When enabled, completing a single writing exercise unlocks every blocked site for the current 6-hour period. Each site still allows only one visit (close the tab and it's blocked again), but you don't have to write separate exercises for each one. Good if you block many sites but don't want to write five different essays just to check your feeds.
+**Unlock All Sites with One Exercise** — Off by default. When enabled, completing a single writing exercise unlocks every blocked site for the current 6-hour period. You don't have to write separate exercises for each one. Stacks with the visits-per-period setting below.
+
+**Visits per Period** — How many times you can open each site per 6-hour period after completing the writing exercise. Default is 1 (strict mode — close the tab and it's blocked until next period). Set to 3 for a few check-ins, or unlimited if you just want the writing gate without visit limits. Extra visits don't require writing again — you only write once per site per period.
 
 **Time Nudge** — After you've been on an unlocked site for this many minutes, a gentle pop-up reminder appears suggesting you think about closing it. Default is 10 minutes. You can dismiss it and keep browsing — it's a nudge, not a block. Set to 0 to disable.
 

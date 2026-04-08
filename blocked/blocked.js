@@ -20,11 +20,34 @@ async function loadState() {
 
   document.getElementById("periodLabel").textContent = state.period.label;
 
-  if (state.unlockState.usedSitesThisPeriod[siteId]) {
+  const visitCount = state.unlockState.usedSitesThisPeriod[siteId] || 0;
+  const limit = state.settings.visitsPerPeriod; // 1, 3, or 0 (unlimited)
+  const exhausted = limit > 0 && visitCount >= limit;
+  const hasWritten = visitCount > 0 || state.unlockState.unlockedSites[siteId];
+
+  if (exhausted) {
+    const label = limit === 1 ? "your visit" : `all ${limit} visits`;
     document.getElementById("periodStatus").textContent =
-      "You already used your unlock for this site during this period.";
+      `You've used ${label} for this site during this period.`;
     unlockBtn.disabled = true;
-    unlockBtn.textContent = "Already unlocked this period";
+    unlockBtn.textContent = "All visits used this period";
+  } else if (hasWritten && !state.unlockState.unlockedSites[siteId]) {
+    // Has visits remaining and already completed writing — go straight through
+    document.getElementById("periodStatus").textContent =
+      `Visit ${visitCount + 1}${limit > 0 ? ` of ${limit}` : ""} — you've already completed a writing exercise.`;
+    unlockBtn.textContent = "Go to site";
+    unlockBtn.addEventListener("click", async () => {
+      const currentTab = await chrome.tabs.getCurrent();
+      const response = await chrome.runtime.sendMessage({
+        action: "unlockSite",
+        siteId,
+        tabId: currentTab.id,
+      });
+      if (response.success) {
+        window.location.href = `https://${domain}`;
+      }
+    }, { once: true });
+    return;
   } else if (state.unlockState.unlockedSites[siteId]) {
     const info = state.unlockState.unlockedSites[siteId];
     if (info.tabId === null) {
