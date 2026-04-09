@@ -6,7 +6,7 @@ const label = params.get("label") || domain;
 document.getElementById("siteName").textContent = label;
 document.title = `${label} is blocked — Social Blocker`;
 
-const unlockBtn = document.getElementById("unlockBtn");
+let unlockBtn = document.getElementById("unlockBtn");
 const emergencyBtn = document.getElementById("emergencyBtn");
 const errorMsg = document.getElementById("errorMsg");
 
@@ -19,6 +19,12 @@ async function loadState() {
   const state = await chrome.runtime.sendMessage({ action: "getState" });
 
   document.getElementById("periodLabel").textContent = state.period.label;
+
+  // Clear any previous click handlers by replacing the button element
+  const oldBtn = document.getElementById("unlockBtn");
+  const newBtn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+  unlockBtn = newBtn;
 
   const visitCount = state.unlockState.usedSitesThisPeriod[siteId] || 0;
   const limit = state.settings.visitsPerPeriod; // 1, 3, or 0 (unlimited)
@@ -45,8 +51,13 @@ async function loadState() {
       });
       if (response.success) {
         window.location.href = `https://${domain}`;
+      } else if (response.error === "alreadyUsedThisPeriod") {
+        // Visits were exhausted between page load and click — reload to show current state
+        loadState();
+      } else {
+        showError("Something went wrong. Please try again.");
       }
-    }, { once: true });
+    });
     return;
   } else if (state.unlockState.unlockedSites[siteId]) {
     const info = state.unlockState.unlockedSites[siteId];
@@ -79,13 +90,14 @@ async function loadState() {
   if (remaining <= 0) {
     emergencyBtn.disabled = true;
   }
-}
 
-unlockBtn.addEventListener("click", () => {
-  window.location.href = chrome.runtime.getURL(
-    `writing/writing.html?site=${encodeURIComponent(siteId)}&domain=${encodeURIComponent(domain)}&label=${encodeURIComponent(label)}`
-  );
-});
+  // Default action: writing exercise (only when no other handler was set above)
+  unlockBtn.addEventListener("click", () => {
+    window.location.href = chrome.runtime.getURL(
+      `writing/writing.html?site=${encodeURIComponent(siteId)}&domain=${encodeURIComponent(domain)}&label=${encodeURIComponent(label)}`
+    );
+  });
+}
 
 emergencyBtn.addEventListener("click", async () => {
   const currentTab = await chrome.tabs.getCurrent();

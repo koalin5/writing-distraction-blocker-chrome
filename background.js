@@ -117,8 +117,26 @@ async function injectContentScripts(tabId) {
       target: { tabId },
       files: ["content-warning.js", "content-nudge.js"],
     });
-    // Send nudge timer config after scripts are injected
     const settings = await getSettings();
+    const unlockState = await getUnlockState();
+
+    // Find which site this tab is for
+    let siteId = null;
+    for (const [id, info] of Object.entries(unlockState.unlockedSites)) {
+      if (info.tabId === tabId) { siteId = id; break; }
+    }
+
+    const visitCount = siteId ? (unlockState.usedSitesThisPeriod[siteId] || 0) : 0;
+    const limit = settings.visitsPerPeriod;
+
+    // Send visit info for the exit warning banner
+    chrome.tabs.sendMessage(tabId, {
+      action: "initWarning",
+      visitCount,
+      visitsPerPeriod: limit,
+    });
+
+    // Send nudge timer config
     if (settings.nudgeMinutes > 0) {
       chrome.tabs.sendMessage(tabId, {
         action: "startNudgeTimer",
@@ -138,21 +156,13 @@ async function handleSiteClose(siteId, unlockState) {
   const visitCount = (unlockState.usedSitesThisPeriod[siteId] || 0) + 1;
   unlockState.usedSitesThisPeriod[siteId] = visitCount;
 
-  if (limit === 0 || visitCount < limit) {
-    // Visits remain — keep the rule removed so the site stays accessible
-    // (rule was already removed when originally unlocked)
-    // But we do need to re-add the rule so the blocked page shows on next visit,
-    // then immediately let them through. Actually, simpler: leave the rule removed
-    // so they can freely navigate. No tab tracking needed until they visit again.
-    // We just need to re-track when they open the site next time.
-    // Leave blocking rule removed — site stays open for this period.
-    await saveUnlockState(unlockState);
-  } else {
-    // All visits used — re-block the site
-    unlockState.usedSitesThisPeriod[siteId] = visitCount;
+  // Re-add the blocking rule when a tab closes (unless unlimited visits).
+  // If visits remain, the blocked page will show a quick "Go to site" button.
+  // This prevents the site from being freely accessible between visits.
+  if (limit !== 0) {
     await addSiteBlockingRule(siteId);
-    await saveUnlockState(unlockState);
   }
+  await saveUnlockState(unlockState);
 }
 
 // --- Tab Tracking ---
@@ -222,23 +232,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     break;
   }
 
-  // Multi-visit re-tracking: if a tab navigates to a site that has visits remaining
-  // (not currently in unlockedSites but rule is removed), re-track it
-  if (changeInfo.url && !Object.values(unlockState.unlockedSites).some(i => i.tabId === tabId)) {
-    const limit = settings.visitsPerPeriod;
-    for (const site of settings.blockedSites) {
-      if (!site.enabled) continue;
-      const visitCount = unlockState.usedSitesThisPeriod[site.id];
-      if (visitCount && (limit === 0 || visitCount < limit) && urlMatchesSite(changeInfo.url, site)) {
-        unlockState.unlockedSites[site.id] = { tabId, unlockedAt: Date.now() };
-        await saveUnlockState(unlockState);
-        if (changeInfo.status === "complete") {
-          injectContentScripts(tabId);
-        }
-        break;
-      }
-    }
-  }
 });
 
 // --- Message Handling ---
