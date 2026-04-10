@@ -1,6 +1,9 @@
 // Injected into unlocked site tabs to nudge the user after a set time.
 // Receives nudgeMinutes via message from background.js after injection.
 
+if (!window.__socialBlockerNudgeLoaded) {
+  window.__socialBlockerNudgeLoaded = true;
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === "startNudgeTimer") {
     startNudge(message.nudgeMinutes);
@@ -89,4 +92,6 @@ function showNudge(minutes) {
     overlay.remove();
     style.remove();
   });
+}
+
 }

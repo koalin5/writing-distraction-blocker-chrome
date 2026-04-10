@@ -82,9 +82,17 @@ async function ensurePeriodState() {
   const unlockState = await getUnlockState();
 
   if (unlockState.currentPeriodStart !== period.periodStart) {
-    // Period changed — re-block all unlocked sites and reset state
-    for (const siteId of Object.keys(unlockState.unlockedSites)) {
+    // Period changed — re-block all unlocked sites, log their time, and reset state
+    for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
       await addSiteBlockingRule(siteId);
+      if (info && info.unlockedAt) {
+        const elapsed = Date.now() - info.unlockedAt;
+        const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
+        const ms = Math.min(Math.max(elapsed, 0), MAX_SESSION_MS);
+        if (ms > 0) {
+          await updateAnalytics({ timeSpent: { siteId, ms } });
+        }
+      }
     }
     await saveUnlockState({
       currentPeriodStart: period.periodStart,
@@ -150,11 +158,19 @@ async function injectContentScripts(tabId) {
 
 // --- Visit Tracking ---
 
-async function handleSiteClose(siteId, unlockState) {
+async function handleSiteClose(siteId, unlockState, closedInfo) {
   const settings = await getSettings();
   const limit = settings.visitsPerPeriod; // 1, 3, or 0 (unlimited)
   const visitCount = (unlockState.usedSitesThisPeriod[siteId] || 0) + 1;
   unlockState.usedSitesThisPeriod[siteId] = visitCount;
+
+  if (closedInfo && closedInfo.unlockedAt) {
+    const elapsed = Date.now() - closedInfo.unlockedAt;
+    // Cap at 6 hours to avoid runaway values from forgotten tabs across suspends.
+    const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
+    const ms = Math.min(Math.max(elapsed, 0), MAX_SESSION_MS);
+    await updateAnalytics({ timeSpent: { siteId, ms } });
+  }
 
   // Re-add the blocking rule when a tab closes (unless unlimited visits).
   // If visits remain, the blocked page will show a quick "Go to site" button.
@@ -187,8 +203,9 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   const unlockState = await getUnlockState();
   for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
     if (info.tabId === tabId) {
+      const closedInfo = { ...info };
       delete unlockState.unlockedSites[siteId];
-      await handleSiteClose(siteId, unlockState);
+      await handleSiteClose(siteId, unlockState, closedInfo);
       break;
     }
   }
@@ -219,8 +236,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.url) {
       const site = settings.blockedSites.find(s => s.id === siteId);
       if (site && !urlMatchesSite(changeInfo.url, site)) {
+        const closedInfo = { ...info };
         delete unlockState.unlockedSites[siteId];
-        await handleSiteClose(siteId, unlockState);
+        await handleSiteClose(siteId, unlockState, closedInfo);
         return;
       }
     }

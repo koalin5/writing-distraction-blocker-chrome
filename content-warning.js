@@ -1,6 +1,9 @@
 // Injected into unlocked site tabs to show exit warning info.
 // Receives visit config via "initWarning" message from background.js.
 
+if (!window.__socialBlockerWarningLoaded) {
+  window.__socialBlockerWarningLoaded = true;
+
 let warningState = null;
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -236,3 +239,5 @@ function onBeforeUnload(e) {
 }
 
 window.addEventListener("beforeunload", onBeforeUnload);
+
+}

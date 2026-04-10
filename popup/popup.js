@@ -317,6 +317,25 @@ async function loadStats() {
     siteStatsList.appendChild(row);
   });
 
+  // Time spent by site
+  const timeStatsList = document.getElementById("timeStatsList");
+  timeStatsList.innerHTML = "";
+  const timeEntries = Object.entries(analytics.timeBySite || {})
+    .filter(([, ms]) => ms > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (timeEntries.length === 0) {
+    document.getElementById("timeStatsSection").style.display = "none";
+  } else {
+    document.getElementById("timeStatsSection").style.display = "block";
+    timeEntries.forEach(([site, ms]) => {
+      const row = document.createElement("div");
+      row.className = "site-stat-row";
+      row.innerHTML = `<span class="name">${site}</span><span class="count">${formatDuration(ms)}</span>`;
+      timeStatsList.appendChild(row);
+    });
+  }
+
   // Emergency unlocks by site
   const emergencyStatsList = document.getElementById("emergencyStatsList");
   emergencyStatsList.innerHTML = "";
@@ -375,6 +394,16 @@ function renderHistorySection(sectionId, listId, history) {
 }
 
 // --- Helpers ---
+
+function formatDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 
 function escapeHtml(str) {
   const div = document.createElement("div");
