@@ -137,11 +137,19 @@ async function injectContentScripts(tabId) {
     const visitCount = siteId ? (unlockState.usedSitesThisPeriod[siteId] || 0) : 0;
     const limit = settings.visitsPerPeriod;
 
+    // Build the list of domains for this site so the content script
+    // can distinguish same-site navigation from leaving the site.
+    const siteConfig = siteId ? settings.blockedSites.find(s => s.id === siteId) : null;
+    const siteDomains = siteConfig
+      ? [siteConfig.domain, ...(siteConfig.extraDomains || [])]
+      : [];
+
     // Send visit info for the exit warning banner
     chrome.tabs.sendMessage(tabId, {
       action: "initWarning",
       visitCount,
       visitsPerPeriod: limit,
+      siteDomains,
     });
 
     // Send nudge timer config
@@ -172,12 +180,9 @@ async function handleSiteClose(siteId, unlockState, closedInfo) {
     await updateAnalytics({ timeSpent: { siteId, ms } });
   }
 
-  // Re-add the blocking rule when a tab closes (unless unlimited visits).
-  // If visits remain, the blocked page will show a quick "Go to site" button.
-  // This prevents the site from being freely accessible between visits.
-  if (limit !== 0) {
-    await addSiteBlockingRule(siteId);
-  }
+  // Always re-add the blocking rule when a tab closes so the site isn't
+  // freely accessible between visits (even in unlimited-visits mode).
+  await addSiteBlockingRule(siteId);
   await saveUnlockState(unlockState);
 }
 

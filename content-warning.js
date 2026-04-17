@@ -11,6 +11,7 @@ chrome.runtime.onMessage.addListener((message) => {
     warningState = {
       visitCount: message.visitCount,
       visitsPerPeriod: message.visitsPerPeriod,
+      siteDomains: message.siteDomains || [],
     };
     showBanner();
   }
@@ -174,10 +175,16 @@ document.addEventListener("click", (e) => {
   const href = link.getAttribute("href");
   if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
 
-  // Check if it's an external navigation (different origin or full URL)
+  // Check if the link stays within the blocked site's domains
   try {
     const target = new URL(href, window.location.href);
+    // Same page (just hash change) — always allow
     if (target.origin === window.location.origin && target.pathname === window.location.pathname) return;
+    // Navigation within the same blocked site — allow without warning
+    const targetHost = target.hostname;
+    if (warningState.siteDomains && warningState.siteDomains.some(
+      d => targetHost === d || targetHost.endsWith("." + d)
+    )) return;
   } catch {
     return;
   }
