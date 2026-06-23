@@ -343,6 +343,95 @@ body {
   background: #2563eb;
 }
 
+/* Dashboard schedule banner */
+.schedule-banner {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid #22c55e;
+  color: #22c55e;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+/* Schedule: Day Picker */
+.day-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.day-btn {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  color: #bbb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.day-btn:hover {
+  border-color: #555;
+}
+
+/* A selected day is a "free"/off day — blocking disabled. */
+.day-btn.off {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+/* Schedule: Time Window */
+.time-window {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.time-window input[type="time"] {
+  padding: 6px 8px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  outline: none;
+}
+
+.time-window input[type="time"]:focus {
+  border-color: #3b82f6;
+}
+
+/* Danger button (Reset Stats) */
+.btn-danger {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #e74c3c;
+  background: none;
+  color: #e74c3c;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: rgba(231, 76, 60, 0.12);
+}
+
+/* History toolbar */
+.history-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
 /* History */
 .history-list {
   display: flex;

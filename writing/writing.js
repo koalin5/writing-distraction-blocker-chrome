@@ -16,6 +16,7 @@ const backBtn = document.getElementById("backBtn");
 
 let requiredWords = 200;
 let currentPrompt = "";
+let allowPaste = false;
 
 // --- Init ---
 
@@ -23,6 +24,16 @@ async function init() {
   const state = await chrome.runtime.sendMessage({ action: "getState" });
   requiredWords = state.settings.wordMinimum;
   requiredWordsEl.textContent = requiredWords;
+
+  // Pasting is blocked by default to keep the exercise genuine, but can be
+  // enabled in Settings (e.g. for dictation users who paste transcribed text).
+  allowPaste = state.settings.allowPaste || false;
+  if (allowPaste) {
+    writingArea.setAttribute(
+      "placeholder",
+      "Start writing here... (pasting is enabled)"
+    );
+  }
 
   // Check if already exhausted visits this period
   const visitCount = state.unlockState.usedSitesThisPeriod[siteId] || 0;
@@ -51,11 +62,13 @@ function pickPrompt(recentPrompts) {
 // --- Anti-Paste ---
 
 writingArea.addEventListener("paste", (e) => {
+  if (allowPaste) return;
   e.preventDefault();
   showWarning("Pasting is not allowed. Please type your response.");
 });
 
 writingArea.addEventListener("drop", (e) => {
+  if (allowPaste) return;
   e.preventDefault();
   showWarning("Drag and drop is not allowed. Please type your response.");
 });

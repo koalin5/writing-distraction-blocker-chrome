@@ -5,6 +5,21 @@ const RULE_ID_BASE = 1000;
 
 // --- Rule Management ---
 
+// All declarativeNetRequest mutations run through this serial queue. Without it,
+// concurrent callers (the 1-min schedule alarm, getState, install/startup) can
+// each snapshot the rule set and then both add the same rule id, producing
+// "Rule with id 1000 does not have a unique ID." Serializing keeps each
+// read-modify-write atomic. Errors are logged, not thrown, so one failed op
+// can't reject an unrelated caller's promise.
+let ruleOpChain = Promise.resolve();
+function runRuleOp(fn) {
+  const result = ruleOpChain.then(fn);
+  ruleOpChain = result.catch((e) => {
+    console.warn("Blocking rule update failed:", e);
+  });
+  return ruleOpChain;
+}
+
 function buildRulesForSite(site, index) {
   const rules = [];
   const baseId = RULE_ID_BASE + index * 10;
@@ -28,22 +43,36 @@ function buildRulesForSite(site, index) {
   return rules;
 }
 
-async function createAllBlockingRules() {
-  const settings = await getSettings();
-  const rules = [];
-  settings.blockedSites.forEach((site, index) => {
-    if (site.enabled) {
-      rules.push(...buildRulesForSite(site, index));
-    }
+function createAllBlockingRules() {
+  return runRuleOp(async () => {
+    const settings = await getSettings();
+    const rules = [];
+    settings.blockedSites.forEach((site, index) => {
+      if (site.enabled) {
+        rules.push(...buildRulesForSite(site, index));
+      }
+    });
+
+    // Clear all existing dynamic rules first
+    const existing = await chrome.declarativeNetRequest.getDynamicRules();
+    const removeRuleIds = existing.map(r => r.id);
+
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds,
+      addRules: rules,
+    });
   });
+}
 
-  // Clear all existing dynamic rules first
-  const existing = await chrome.declarativeNetRequest.getDynamicRules();
-  const removeRuleIds = existing.map(r => r.id);
-
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds,
-    addRules: rules,
+// Remove every dynamic rule (used when the schedule turns blocking off).
+function removeAllBlockingRules() {
+  return runRuleOp(async () => {
+    const existing = await chrome.declarativeNetRequest.getDynamicRules();
+    if (existing.length) {
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: existing.map(r => r.id),
+      });
+    }
   });
 }
 
@@ -53,26 +82,80 @@ function getRuleIdForSite(siteId, settings) {
   return RULE_ID_BASE + index * 10;
 }
 
-async function removeSiteBlockingRule(siteId) {
-  const settings = await getSettings();
-  const ruleId = getRuleIdForSite(siteId, settings);
-  if (ruleId === null) return;
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [ruleId],
+function removeSiteBlockingRule(siteId) {
+  return runRuleOp(async () => {
+    const settings = await getSettings();
+    const ruleId = getRuleIdForSite(siteId, settings);
+    if (ruleId === null) return;
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [ruleId],
+    });
   });
 }
 
-async function addSiteBlockingRule(siteId) {
-  const settings = await getSettings();
-  const index = settings.blockedSites.findIndex(s => s.id === siteId);
-  if (index === -1) return;
-  const site = settings.blockedSites[index];
-  const rules = buildRulesForSite(site, index);
-  const removeRuleIds = rules.map(r => r.id);
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds,
-    addRules: rules,
+function addSiteBlockingRule(siteId) {
+  return runRuleOp(async () => {
+    const settings = await getSettings();
+    const index = settings.blockedSites.findIndex(s => s.id === siteId);
+    if (index === -1) return;
+    const site = settings.blockedSites[index];
+    const rules = buildRulesForSite(site, index);
+    const removeRuleIds = rules.map(r => r.id);
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds,
+      addRules: rules,
+    });
   });
+}
+
+// --- Schedule (day + time-of-day) ---
+
+function parseHour(hhmm) {
+  // "09:30" -> 9.5 ; falls back to 0 on bad input
+  const [h, m] = String(hhmm || "").split(":").map(Number);
+  if (Number.isNaN(h)) return 0;
+  return h + (Number.isNaN(m) ? 0 : m) / 60;
+}
+
+// Whether blocking should currently be enforced, given day + time-of-day schedule.
+function isBlockingActiveNow(settings, now = new Date()) {
+  const freeDays = settings.freeDays || [];
+  if (freeDays.includes(now.getDay())) return false; // today is a free day
+
+  const sched = settings.blockSchedule;
+  if (sched && sched.enabled) {
+    const hour = now.getHours() + now.getMinutes() / 60;
+    const start = parseHour(sched.start);
+    const end = parseHour(sched.end);
+    if (start === end) return false; // empty window
+    return start < end
+      ? hour >= start && hour < end          // same-day window
+      : hour >= start || hour < end;         // window wraps past midnight
+  }
+  return true;
+}
+
+// Apply or clear blocking rules to match the current schedule. Cheap to call
+// often: it no-ops unless the active/inactive state actually changed (or force).
+async function reconcileBlocking(force = false) {
+  const settings = await getSettings();
+  const active = isBlockingActiveNow(settings);
+  const stored = (await chrome.storage.local.get("blockingActive")).blockingActive;
+
+  if (!force && stored === active) return;
+
+  if (active) {
+    await createAllBlockingRules();
+    // Keep any currently-unlocked sites accessible after a full rebuild.
+    const unlockState = await getUnlockState();
+    for (const siteId of Object.keys(unlockState.unlockedSites)) {
+      await removeSiteBlockingRule(siteId);
+    }
+  } else {
+    // Schedule says "free" — remove every dynamic blocking rule.
+    await removeAllBlockingRules();
+  }
+  await chrome.storage.local.set({ blockingActive: active });
 }
 
 // --- Period Management ---
@@ -80,11 +163,13 @@ async function addSiteBlockingRule(siteId) {
 async function ensurePeriodState() {
   const period = getCurrentPeriod();
   const unlockState = await getUnlockState();
+  const settings = await getSettings();
+  const blockingActive = isBlockingActiveNow(settings);
 
   if (unlockState.currentPeriodStart !== period.periodStart) {
     // Period changed — re-block all unlocked sites, log their time, and reset state
     for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
-      await addSiteBlockingRule(siteId);
+      if (blockingActive) await addSiteBlockingRule(siteId);
       if (info && info.unlockedAt) {
         const elapsed = Date.now() - info.unlockedAt;
         const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
@@ -107,6 +192,9 @@ async function ensurePeriodState() {
   if (emergency.weekStart !== currentWeekStart) {
     await saveEmergencyUnlocks({ weekStart: currentWeekStart, usedThisWeek: 0 });
   }
+
+  // Settle blocking rules against the day/time schedule.
+  await reconcileBlocking();
 }
 
 function schedulePeriodAlarm() {
@@ -115,6 +203,8 @@ function schedulePeriodAlarm() {
   chrome.alarms.create("periodTransition", {
     delayInMinutes: Math.max(msUntilEnd / 60000, 0.1),
   });
+  // Heartbeat so day/time-of-day schedule transitions take effect promptly.
+  chrome.alarms.create("scheduleCheck", { periodInMinutes: 1 });
 }
 
 // --- Warning Injection ---
@@ -278,6 +368,7 @@ async function handleMessage(message, sender) {
         settings,
         unlockState,
         emergency,
+        blockingActive: isBlockingActiveNow(settings),
         period: { ...period, label: getPeriodLabel(period.periodIndex) },
       };
     }
@@ -297,20 +388,26 @@ async function handleMessage(message, sender) {
       }
 
       if (settings.unlockAllMode) {
-        // Unlock ALL enabled sites for this period
+        // Unlock ALL enabled sites for this period. This is ONE unlock event,
+        // not one per site — we collect the granted sites and record them in a
+        // single analytics entry so "Unlock Sessions" reflects exercises done.
         const enabledSites = settings.blockedSites.filter(s => s.enabled);
+        const grantedSites = [];
         for (const site of enabledSites) {
           const siteVisits = unlockState.usedSitesThisPeriod[site.id] || 0;
           const siteExhausted = limit > 0 && siteVisits >= limit;
           if (!unlockState.unlockedSites[site.id] && !siteExhausted) {
             unlockState.unlockedSites[site.id] = { tabId: null, unlockedAt: Date.now() };
             await removeSiteBlockingRule(site.id);
-            await updateAnalytics({ unlock: site.id });
+            grantedSites.push(site.id);
           }
         }
         // Set the requesting site's tab for tracking
         unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
         await saveUnlockState(unlockState);
+        if (grantedSites.length > 0) {
+          await updateAnalytics({ unlock: { siteId, sites: grantedSites } });
+        }
       } else {
         // Standard mode: unlock only the requested site
         unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
@@ -373,7 +470,7 @@ async function handleMessage(message, sender) {
 
       settings.blockedSites.push({ id, domain, label: label || domain, enabled: true, isCustom: true });
       await saveSettings(settings);
-      await createAllBlockingRules();
+      await reconcileBlocking(true);
       return { success: true };
     }
 
@@ -384,7 +481,7 @@ async function handleMessage(message, sender) {
       const siteLabel = site ? site.label : siteId;
       settings.blockedSites = settings.blockedSites.filter(s => s.id !== siteId);
       await saveSettings(settings);
-      await createAllBlockingRules();
+      await reconcileBlocking(true);
       await updateAnalytics({ siteRemoved: siteId });
       return { success: true };
     }
@@ -408,24 +505,36 @@ async function handleMessage(message, sender) {
 
       site.enabled = enabled;
       await saveSettings(settings);
-      await createAllBlockingRules();
+      await reconcileBlocking(true);
       return { success: true };
     }
 
     case "updateSettings": {
-      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode, nudgeMinutes, visitsPerPeriod } = message;
+      const { wordMinimum, emergencyUnlocksPerWeek, unlockAllMode, nudgeMinutes, visitsPerPeriod, allowPaste, freeDays, blockSchedule } = message;
       const settings = await getSettings();
       if (wordMinimum !== undefined) settings.wordMinimum = wordMinimum;
       if (emergencyUnlocksPerWeek !== undefined) settings.emergencyUnlocksPerWeek = emergencyUnlocksPerWeek;
       if (unlockAllMode !== undefined) settings.unlockAllMode = unlockAllMode;
       if (nudgeMinutes !== undefined) settings.nudgeMinutes = nudgeMinutes;
       if (visitsPerPeriod !== undefined) settings.visitsPerPeriod = visitsPerPeriod;
+      if (allowPaste !== undefined) settings.allowPaste = allowPaste;
+      if (freeDays !== undefined) settings.freeDays = freeDays;
+      if (blockSchedule !== undefined) settings.blockSchedule = blockSchedule;
       await saveSettings(settings);
+      // Day/time schedule changes may flip blocking on or off right now.
+      if (freeDays !== undefined || blockSchedule !== undefined) {
+        await reconcileBlocking(true);
+      }
       return { success: true };
     }
 
     case "getAnalytics": {
       return await getAnalytics();
+    }
+
+    case "resetAnalytics": {
+      await resetAnalytics();
+      return { success: true };
     }
 
     case "getWritingHistory": {
@@ -441,12 +550,13 @@ async function handleMessage(message, sender) {
 
 chrome.runtime.onInstalled.addListener(async () => {
   await initializeDefaults();
-  await createAllBlockingRules();
+  await reconcileBlocking(true);
   await ensurePeriodState();
   schedulePeriodAlarm();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
+  await reconcileBlocking(true);
   await ensurePeriodState();
   schedulePeriodAlarm();
 });
@@ -455,6 +565,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "periodTransition") {
     await ensurePeriodState();
     schedulePeriodAlarm();
+  } else if (alarm.name === "scheduleCheck") {
+    await reconcileBlocking();
   }
 });
 

@@ -8,7 +8,7 @@ A Chrome extension that blocks social media sites and makes you complete a writi
 2. **Write to unlock.** To access a blocked site, complete a writing exercise — a random creative prompt with a word minimum you choose (50, 100, 200, 500, or 750 words).
 3. **One visit per period.** The day is split into four 6-hour windows (12am–6am, 6am–12pm, 12pm–6pm, 6pm–12am). You get one unlock per site per window. Close the tab or navigate away and it's blocked again until the next window.
 4. **Unlock-all mode (optional).** By default, you write one exercise per site. Turn on "Unlock all sites with one exercise" in settings, and a single writing exercise unlocks every blocked site for the current period. You still get only one visit per site — it just saves you from writing multiple exercises.
-5. **Anti-cheat.** No pasting, no drag-and-drop, no single-letter spam. The extension validates that you're writing real words with reasonable variety.
+5. **Anti-cheat.** No pasting, no drag-and-drop, no single-letter spam. The extension validates that you're writing real words with reasonable variety. (Pasting can be enabled in settings if you dictate your response.)
 6. **Emergency bypass.** For genuinely urgent situations, you get 3 emergency unlocks per week (configurable) that skip the writing requirement.
 
 ## Pre-Blocked Sites
@@ -108,6 +108,10 @@ Shows your current state at a glance:
 
 **Visits per Period** — How many times you can open each site per 6-hour period after completing the writing exercise. Default is 1 (strict mode — close the tab and it's blocked until next period). Set to 3 for a few check-ins, or unlimited if you just want the writing gate without visit limits. Extra visits don't require writing again — you only write once per site per period.
 
+**Allow Pasting** — Off by default. Pasting (and drag-and-drop) into the writing exercise is blocked so the writing stays genuine. Turn this on if you dictate your response with speech-to-text and want to paste the transcription instead of retyping it. Word-count and anti-spam checks still apply.
+
+**Blocking Schedule** — Choose days to take **off**: blocking is disabled all day on the days you select (unselected days stay blocked). You can also enable an hours window so that, on blocking days, sites are only blocked during a set time range (e.g. 9am–5pm) and free outside it. The window may wrap past midnight (e.g. 10pm–6am).
+
 **Time Nudge** — After you've been on an unlocked site for this many minutes, a gentle pop-up reminder appears suggesting you think about closing it. Default is 10 minutes. You can dismiss it and keep browsing — it's a nudge, not a block. Set to 0 to disable.
 
 **Emergency Unlocks per Week** — How many times you can bypass the writing requirement per week (resets every Monday). Default is 3. Set to 0 if you want no escape hatch.
@@ -127,16 +131,18 @@ The site and all its subdomains are blocked immediately. You can add any domain 
 
 ### History Tab
 
-A chronological list of every writing exercise you've completed. Each entry shows the site you unlocked, the prompt you received, the date, and your word count. Your full written text is saved locally and viewable here.
+A chronological list of every writing exercise you've completed. Each entry shows the site you unlocked, the prompt you received, the date, and your word count. Your full written text is saved locally and viewable here. Use **Export** to download your whole writing history as a text file.
 
 ### Stats Tab
 
 Cumulative analytics across all your usage:
-- Total unlocks (writing + emergency combined)
-- Writing exercises completed
-- Total words written
-- Emergency unlocks used
-- Breakdown of unlocks per site
+- **Exercises Done** and **Day Streak** — exercises completed and your current consecutive-day streak
+- **Words Written** and **Avg Words** — total and per-exercise averages
+- **Unlock Sessions** — how many times you unlocked access. One exercise counts as one session, even in unlock-all mode.
+- **Emergency Unlocks** — no-writing bypasses used
+- **Sites Unlocked** — how many times each site was unlocked (in unlock-all mode one session can grant several sites, so this total can exceed your session count)
+
+Exercises and words are read from your writing history, so they stay accurate. **Reset Stats** clears the unlock/emergency/time counters without touching your writing history.
 
 ## Project Structure
 

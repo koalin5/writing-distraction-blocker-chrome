@@ -23,8 +23,28 @@ const DEFAULT_SETTINGS = {
   unlockAllMode: false, // When true, one writing exercise unlocks ALL blocked sites for the period
   nudgeMinutes: 10, // Minutes before showing a "you've been here a while" nudge (0 = disabled)
   visitsPerPeriod: 1, // How many times you can open a site per period after writing (1, 3, or 0 = unlimited)
+  allowPaste: false, // When true, pasting into the writing exercise is allowed (useful for dictation)
+  freeDays: [], // Weekday numbers (0=Sun … 6=Sat) on which blocking is OFF entirely
+  blockSchedule: { enabled: false, start: "09:00", end: "17:00" }, // When enabled, only block during this daily window
   blockedSites: DEFAULT_BLOCKED_SITES,
 };
+
+function getDefaultAnalytics() {
+  return {
+    totalUnlocks: 0,
+    unlocksBySite: {},
+    totalWritingExercises: 0,
+    totalWordsWritten: 0,
+    totalEmergencyUnlocks: 0,
+    emergencyUnlocksBySite: {},
+    totalSiteToggles: 0,
+    siteToggleHistory: [],
+    totalSiteRemovals: 0,
+    siteRemovalHistory: [],
+    timeBySite: {},
+    totalTimeOnUnlockedSites: 0,
+  };
+}
 
 function getMonday(date) {
   const d = new Date(date);
@@ -98,27 +118,25 @@ async function addWritingEntry(entry) {
 
 async function getAnalytics() {
   const result = await chrome.storage.local.get("analytics");
-  return result.analytics || {
-    totalUnlocks: 0,
-    unlocksBySite: {},
-    totalWritingExercises: 0,
-    totalWordsWritten: 0,
-    totalEmergencyUnlocks: 0,
-    emergencyUnlocksBySite: {},
-    totalSiteToggles: 0,
-    siteToggleHistory: [],
-    totalSiteRemovals: 0,
-    siteRemovalHistory: [],
-    timeBySite: {},
-    totalTimeOnUnlockedSites: 0,
-  };
+  return result.analytics || getDefaultAnalytics();
+}
+
+async function resetAnalytics() {
+  await chrome.storage.local.set({ analytics: getDefaultAnalytics() });
 }
 
 async function updateAnalytics(deltas) {
   const analytics = await getAnalytics();
   if (deltas.unlock) {
+    // An unlock is ONE event regardless of how many sites it grants access to.
+    // `deltas.unlock` is either a siteId string (single-site unlock) or an
+    // object { siteId, sites: [...] } (unlock-all grants many sites at once).
+    const u = deltas.unlock;
+    const sites = (typeof u === "object" && u.sites) ? u.sites : [typeof u === "object" ? u.siteId : u];
     analytics.totalUnlocks++;
-    analytics.unlocksBySite[deltas.unlock] = (analytics.unlocksBySite[deltas.unlock] || 0) + 1;
+    sites.forEach(s => {
+      analytics.unlocksBySite[s] = (analytics.unlocksBySite[s] || 0) + 1;
+    });
   }
   if (deltas.writing) {
     analytics.totalWritingExercises++;
@@ -156,14 +174,7 @@ async function initializeDefaults() {
       unlockState: { currentPeriodStart: 0, unlockedSites: {}, usedSitesThisPeriod: {} },
       emergencyUnlocks: { weekStart: getMonday(new Date()), usedThisWeek: 0 },
       writingHistory: [],
-      analytics: {
-        totalUnlocks: 0,
-        unlocksBySite: {},
-        totalWritingExercises: 0,
-        totalWordsWritten: 0,
-        totalEmergencyUnlocks: 0,
-        emergencyUnlocksBySite: {},
-      },
+      analytics: getDefaultAnalytics(),
     });
   }
 }

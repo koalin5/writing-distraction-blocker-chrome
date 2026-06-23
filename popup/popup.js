@@ -23,6 +23,19 @@ async function loadDashboard() {
 
   document.getElementById("periodBadge").textContent = state.period.label;
 
+  // Schedule banner — let the user know when blocking is currently off.
+  const banner = document.getElementById("scheduleBanner");
+  if (state.blockingActive === false) {
+    const sched = state.settings.blockSchedule;
+    const isFreeDay = (state.settings.freeDays || []).includes(new Date().getDay());
+    banner.textContent = isFreeDay
+      ? "Blocking is off today (free day)."
+      : "Blocking is off right now (outside your set hours).";
+    banner.classList.remove("hidden");
+  } else {
+    banner.classList.add("hidden");
+  }
+
   const remaining = state.settings.emergencyUnlocksPerWeek - state.emergency.usedThisWeek;
   document.getElementById("emergencyRemaining").textContent = `${remaining} / ${state.settings.emergencyUnlocksPerWeek} left this week`;
 
@@ -85,6 +98,19 @@ async function loadSettings() {
 
   // Nudge minutes
   document.getElementById("nudgeMinutes").value = settings.nudgeMinutes ?? 10;
+
+  // Allow paste
+  document.getElementById("allowPasteToggle").checked = settings.allowPaste || false;
+
+  // Schedule — day picker (selected day = a free/off day)
+  renderDayPicker(settings.freeDays || []);
+
+  // Schedule — time window
+  const sched = settings.blockSchedule || { enabled: false, start: "09:00", end: "17:00" };
+  document.getElementById("blockScheduleToggle").checked = sched.enabled || false;
+  document.getElementById("blockStart").value = sched.start || "09:00";
+  document.getElementById("blockEnd").value = sched.end || "17:00";
+  document.getElementById("timeWindow").style.display = sched.enabled ? "flex" : "none";
 
   // Emergency limit
   document.getElementById("emergencyLimit").value = settings.emergencyUnlocksPerWeek;
@@ -151,6 +177,64 @@ document.getElementById("emergencyLimit").addEventListener("change", async (e) =
   await chrome.runtime.sendMessage({
     action: "updateSettings",
     emergencyUnlocksPerWeek: parseInt(e.target.value) || 3,
+  });
+});
+
+// --- Schedule controls ---
+
+const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function renderDayPicker(freeDays) {
+  const picker = document.getElementById("dayPicker");
+  picker.innerHTML = "";
+  DAY_LABELS.forEach((label, day) => {
+    const btn = document.createElement("button");
+    btn.className = "day-btn" + (freeDays.includes(day) ? " off" : "");
+    btn.textContent = label;
+    btn.dataset.day = day;
+    btn.title = freeDays.includes(day) ? "Free day (no blocking)" : "Blocking on";
+    picker.appendChild(btn);
+  });
+}
+
+document.getElementById("dayPicker").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".day-btn");
+  if (!btn) return;
+  const day = parseInt(btn.dataset.day);
+
+  const state = await chrome.runtime.sendMessage({ action: "getState" });
+  const freeDays = new Set(state.settings.freeDays || []);
+  if (freeDays.has(day)) freeDays.delete(day); else freeDays.add(day);
+  const updated = [...freeDays].sort((a, b) => a - b);
+
+  await chrome.runtime.sendMessage({ action: "updateSettings", freeDays: updated });
+  renderDayPicker(updated);
+  loadDashboard();
+});
+
+async function saveSchedule() {
+  await chrome.runtime.sendMessage({
+    action: "updateSettings",
+    blockSchedule: {
+      enabled: document.getElementById("blockScheduleToggle").checked,
+      start: document.getElementById("blockStart").value || "09:00",
+      end: document.getElementById("blockEnd").value || "17:00",
+    },
+  });
+  loadDashboard();
+}
+
+document.getElementById("blockScheduleToggle").addEventListener("change", (e) => {
+  document.getElementById("timeWindow").style.display = e.target.checked ? "flex" : "none";
+  saveSchedule();
+});
+document.getElementById("blockStart").addEventListener("change", saveSchedule);
+document.getElementById("blockEnd").addEventListener("change", saveSchedule);
+
+document.getElementById("allowPasteToggle").addEventListener("change", async (e) => {
+  await chrome.runtime.sendMessage({
+    action: "updateSettings",
+    allowPaste: e.target.checked,
   });
 });
 
@@ -242,11 +326,14 @@ document.getElementById("addSiteBtn").addEventListener("click", async () => {
 async function loadHistory() {
   const history = await chrome.runtime.sendMessage({ action: "getWritingHistory" });
   const list = document.getElementById("historyList");
+  const toolbar = document.getElementById("historyToolbar");
 
   if (!history || history.length === 0) {
+    toolbar.style.display = "none";
     list.innerHTML = '<p class="empty-state">No writing exercises completed yet.</p>';
     return;
   }
+  toolbar.style.display = "flex";
 
   list.innerHTML = "";
 
@@ -293,10 +380,19 @@ async function loadHistory() {
 
 async function loadStats() {
   const analytics = await chrome.runtime.sendMessage({ action: "getAnalytics" });
+  const history = await chrome.runtime.sendMessage({ action: "getWritingHistory" }) || [];
 
+  // Exercises and words come straight from writing history (the source of
+  // truth), so they stay accurate even after a stats reset.
+  const exerciseCount = history.length;
+  const totalWords = history.reduce((sum, e) => sum + (e.wordCount || 0), 0);
+  const avgWords = exerciseCount > 0 ? Math.round(totalWords / exerciseCount) : 0;
+
+  document.getElementById("statTotalWriting").textContent = exerciseCount;
+  document.getElementById("statStreak").textContent = computeStreak(history);
+  document.getElementById("statTotalWords").textContent = totalWords.toLocaleString();
+  document.getElementById("statAvgWords").textContent = avgWords.toLocaleString();
   document.getElementById("statTotalUnlocks").textContent = analytics.totalUnlocks || 0;
-  document.getElementById("statTotalWriting").textContent = analytics.totalWritingExercises || 0;
-  document.getElementById("statTotalWords").textContent = (analytics.totalWordsWritten || 0).toLocaleString();
   document.getElementById("statEmergency").textContent = analytics.totalEmergencyUnlocks || 0;
 
   const siteStatsList = document.getElementById("siteStatsList");
@@ -392,6 +488,83 @@ function renderHistorySection(sectionId, listId, history) {
     list.appendChild(row);
   });
 }
+
+// Consecutive-day streak of completed exercises, counting back from today.
+// Today not yet done but yesterday done still counts (streak alive until day ends).
+function computeStreak(history) {
+  if (!history.length) return 0;
+
+  const dayKeys = new Set(
+    history.map(e => {
+      const d = new Date(e.completedAt);
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    })
+  );
+
+  const keyFor = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+
+  // If today has no entry, start counting from yesterday so a not-yet-done
+  // today doesn't reset an otherwise-live streak.
+  if (!dayKeys.has(keyFor(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  let streak = 0;
+  while (dayKeys.has(keyFor(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+// --- Stats reset ---
+
+document.getElementById("resetStatsBtn").addEventListener("click", () => {
+  showConfirmDialog(
+    "Reset stats?",
+    "This clears unlock, emergency, time, and site-change counters. Your writing history (exercises and words written) is kept. This can't be undone.",
+    async () => {
+      await chrome.runtime.sendMessage({ action: "resetAnalytics" });
+      loadStats();
+    }
+  );
+});
+
+// --- Export writing history ---
+
+document.getElementById("exportHistoryBtn").addEventListener("click", async () => {
+  const history = await chrome.runtime.sendMessage({ action: "getWritingHistory" }) || [];
+  if (!history.length) return;
+
+  const lines = [];
+  lines.push("Social Blocker — Writing History");
+  lines.push(`Exported ${new Date().toLocaleString()}`);
+  lines.push(`${history.length} exercise${history.length === 1 ? "" : "s"}`);
+  lines.push("");
+
+  [...history].reverse().forEach(entry => {
+    const date = new Date(entry.completedAt).toLocaleString();
+    lines.push("=".repeat(60));
+    lines.push(`${date}  ·  ${entry.siteId}  ·  ${entry.wordCount} words`);
+    lines.push(`Prompt: ${entry.prompt}`);
+    lines.push("");
+    lines.push(entry.text || "");
+    lines.push("");
+  });
+
+  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.download = `social-blocker-writing-${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
 
 // --- Helpers ---
 

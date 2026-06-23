@@ -24,6 +24,7 @@
 
     <!-- Dashboard Tab -->
     <div class="tab-content active" id="tab-dashboard">
+      <div id="scheduleBanner" class="schedule-banner hidden"></div>
       <div class="section">
         <div class="info-row">
           <span class="info-label">Emergency unlocks</span>
@@ -57,6 +58,32 @@
           <span>Unlock all sites with one exercise</span>
         </label>
         <p class="setting-hint">When enabled, completing one writing exercise unlocks every blocked site for the current period.</p>
+      </div>
+
+      <div class="section">
+        <h3>Allow Pasting</h3>
+        <label class="toggle-label">
+          <input type="checkbox" id="allowPasteToggle">
+          <span>Allow pasting into writing exercises</span>
+        </label>
+        <p class="setting-hint">Pasting is blocked by default to keep exercises genuine. Turn this on if you dictate your response and paste the transcription.</p>
+      </div>
+
+      <div class="section">
+        <h3>Blocking Schedule</h3>
+        <p class="setting-hint">Pick days to take <strong>off</strong> — blocking is disabled all day on the days you select. Unselected days stay blocked.</p>
+        <div class="day-picker" id="dayPicker"></div>
+
+        <label class="toggle-label" style="margin-top:12px;">
+          <input type="checkbox" id="blockScheduleToggle">
+          <span>Only block during set hours</span>
+        </label>
+        <div class="time-window" id="timeWindow">
+          <input type="time" id="blockStart" value="09:00">
+          <span class="input-hint">to</span>
+          <input type="time" id="blockEnd" value="17:00">
+        </div>
+        <p class="setting-hint">On blocking days, sites are only blocked inside this window. Outside it, they're free.</p>
       </div>
 
       <div class="section">
@@ -99,6 +126,9 @@
 
     <!-- History Tab -->
     <div class="tab-content" id="tab-history">
+      <div class="history-toolbar" id="historyToolbar">
+        <button id="exportHistoryBtn" class="btn btn-small">Export</button>
+      </div>
       <div id="historyList" class="history-list">
         <p class="empty-state">No writing exercises completed yet.</p>
       </div>
@@ -108,16 +138,24 @@
     <div class="tab-content" id="tab-stats">
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value" id="statTotalUnlocks">0</div>
-          <div class="stat-label">Total Unlocks</div>
-        </div>
-        <div class="stat-card">
           <div class="stat-value" id="statTotalWriting">0</div>
           <div class="stat-label">Exercises Done</div>
         </div>
         <div class="stat-card">
+          <div class="stat-value" id="statStreak">0</div>
+          <div class="stat-label">Day Streak</div>
+        </div>
+        <div class="stat-card">
           <div class="stat-value" id="statTotalWords">0</div>
           <div class="stat-label">Words Written</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statAvgWords">0</div>
+          <div class="stat-label">Avg Words</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalUnlocks">0</div>
+          <div class="stat-label">Unlock Sessions</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="statEmergency">0</div>
@@ -126,7 +164,8 @@
       </div>
 
       <div class="section" id="siteStatsSection">
-        <h3>Unlocks by Site</h3>
+        <h3>Sites Unlocked</h3>
+        <p class="setting-hint">How many times each site was unlocked. In "unlock all" mode one exercise unlocks several sites, so this total can exceed your unlock sessions.</p>
         <div id="siteStatsList" class="site-stats-list"></div>
       </div>
 
@@ -148,6 +187,11 @@
       <div class="section" id="removedStatsSection">
         <h3>Sites Removed</h3>
         <div id="removedStatsList" class="site-stats-list"></div>
+      </div>
+
+      <div class="section">
+        <button id="resetStatsBtn" class="btn btn-danger">Reset Stats</button>
+        <p class="setting-hint">Clears unlock, emergency, and time counters. Your writing history (exercises &amp; words) is kept.</p>
       </div>
     </div>
   </div>
