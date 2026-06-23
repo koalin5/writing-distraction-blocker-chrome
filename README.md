@@ -141,6 +141,7 @@ Cumulative analytics across all your usage:
 - **Unlock Sessions** — how many times you unlocked access. One exercise counts as one session, even in unlock-all mode.
 - **Emergency Unlocks** — no-writing bypasses used
 - **Sites Unlocked** — how many times each site was unlocked (in unlock-all mode one session can grant several sites, so this total can exceed your session count)
+- **Time Spent by Site** — *active* time on each site, counted only while the tab is visible and focused. Switching tabs, minimizing, focusing another app, or letting the machine sleep pauses the timer, so this reflects real usage rather than how long a tab sat open. Sites unlocked but never opened accrue no time.
 
 Exercises and words are read from your writing history, so they stay accurate. **Reset Stats** clears the unlock/emergency/time counters without touching your writing history.
 

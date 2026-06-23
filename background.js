@@ -167,17 +167,10 @@ async function ensurePeriodState() {
   const blockingActive = isBlockingActiveNow(settings);
 
   if (unlockState.currentPeriodStart !== period.periodStart) {
-    // Period changed — re-block all unlocked sites, log their time, and reset state
-    for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
+    // Period changed — re-block all unlocked sites and reset state. Time spent is
+    // tracked live by the content script (active time only), so nothing to log here.
+    for (const siteId of Object.keys(unlockState.unlockedSites)) {
       if (blockingActive) await addSiteBlockingRule(siteId);
-      if (info && info.unlockedAt) {
-        const elapsed = Date.now() - info.unlockedAt;
-        const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
-        const ms = Math.min(Math.max(elapsed, 0), MAX_SESSION_MS);
-        if (ms > 0) {
-          await updateAnalytics({ timeSpent: { siteId, ms } });
-        }
-      }
     }
     await saveUnlockState({
       currentPeriodStart: period.periodStart,
@@ -234,9 +227,11 @@ async function injectContentScripts(tabId) {
       ? [siteConfig.domain, ...(siteConfig.extraDomains || [])]
       : [];
 
-    // Send visit info for the exit warning banner
+    // Send visit info for the exit warning banner (siteId lets the content
+    // script attribute active-time reports back to this site).
     chrome.tabs.sendMessage(tabId, {
       action: "initWarning",
+      siteId,
       visitCount,
       visitsPerPeriod: limit,
       siteDomains,
@@ -256,19 +251,14 @@ async function injectContentScripts(tabId) {
 
 // --- Visit Tracking ---
 
-async function handleSiteClose(siteId, unlockState, closedInfo) {
+async function handleSiteClose(siteId, unlockState) {
   const settings = await getSettings();
   const limit = settings.visitsPerPeriod; // 1, 3, or 0 (unlimited)
   const visitCount = (unlockState.usedSitesThisPeriod[siteId] || 0) + 1;
   unlockState.usedSitesThisPeriod[siteId] = visitCount;
 
-  if (closedInfo && closedInfo.unlockedAt) {
-    const elapsed = Date.now() - closedInfo.unlockedAt;
-    // Cap at 6 hours to avoid runaway values from forgotten tabs across suspends.
-    const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
-    const ms = Math.min(Math.max(elapsed, 0), MAX_SESSION_MS);
-    await updateAnalytics({ timeSpent: { siteId, ms } });
-  }
+  // Time spent is reported live by the content script (active time only), so we
+  // don't measure tab-open duration here — that would count idle/background time.
 
   // Always re-add the blocking rule when a tab closes so the site isn't
   // freely accessible between visits (even in unlimited-visits mode).
@@ -298,9 +288,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   const unlockState = await getUnlockState();
   for (const [siteId, info] of Object.entries(unlockState.unlockedSites)) {
     if (info.tabId === tabId) {
-      const closedInfo = { ...info };
       delete unlockState.unlockedSites[siteId];
-      await handleSiteClose(siteId, unlockState, closedInfo);
+      await handleSiteClose(siteId, unlockState);
       break;
     }
   }
@@ -331,9 +320,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.url) {
       const site = settings.blockedSites.find(s => s.id === siteId);
       if (site && !urlMatchesSite(changeInfo.url, site)) {
-        const closedInfo = { ...info };
         delete unlockState.unlockedSites[siteId];
-        await handleSiteClose(siteId, unlockState, closedInfo);
+        await handleSiteClose(siteId, unlockState);
         return;
       }
     }
@@ -448,6 +436,17 @@ async function handleMessage(message, sender) {
       if (unlockState.unlockedSites[siteId]) {
         unlockState.unlockedSites[siteId].tabId = tabId;
         await saveUnlockState(unlockState);
+      }
+      return { success: true };
+    }
+
+    case "reportActiveTime": {
+      // A content script reporting active (focused + visible) time on a site.
+      const { siteId, ms } = message;
+      if (siteId && ms > 0) {
+        // Guard against pathological slices (e.g. clock jumps).
+        const MAX_SLICE_MS = 5 * 60 * 1000;
+        await updateAnalytics({ timeSpent: { siteId, ms: Math.min(ms, MAX_SLICE_MS) } });
       }
       return { success: true };
     }

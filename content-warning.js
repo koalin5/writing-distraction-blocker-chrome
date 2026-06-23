@@ -14,8 +14,53 @@ chrome.runtime.onMessage.addListener((message) => {
       siteDomains: message.siteDomains || [],
     };
     showBanner();
+    if (message.siteId) startActiveTracking(message.siteId);
   }
 });
+
+// --- Active time tracking ---
+// Counts time only while this tab is actually being used (visible AND focused),
+// using a fixed-step heartbeat. Because each tick adds a constant amount only
+// when active, time naturally pauses when you switch tabs, minimize, focus
+// another app, or the machine sleeps (the interval simply doesn't fire). Slices
+// are flushed to the background periodically and whenever the tab is hidden.
+
+let activeTrackingSiteId = null;
+let pendingActiveMs = 0;
+let sinceFlushMs = 0;
+const ACTIVE_TICK_MS = 5000;     // heartbeat granularity
+const ACTIVE_FLUSH_MS = 20000;   // report at least this often
+
+function startActiveTracking(siteId) {
+  if (activeTrackingSiteId) return; // already running
+  activeTrackingSiteId = siteId;
+
+  setInterval(() => {
+    if (document.visibilityState === "visible" && document.hasFocus()) {
+      pendingActiveMs += ACTIVE_TICK_MS;
+      sinceFlushMs += ACTIVE_TICK_MS;
+      if (sinceFlushMs >= ACTIVE_FLUSH_MS) flushActiveTime();
+    }
+  }, ACTIVE_TICK_MS);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushActiveTime();
+  });
+  window.addEventListener("pagehide", flushActiveTime);
+  window.addEventListener("blur", flushActiveTime);
+}
+
+function flushActiveTime() {
+  sinceFlushMs = 0;
+  if (!activeTrackingSiteId || pendingActiveMs <= 0) return;
+  const ms = pendingActiveMs;
+  pendingActiveMs = 0;
+  try {
+    chrome.runtime.sendMessage({ action: "reportActiveTime", siteId: activeTrackingSiteId, ms });
+  } catch {
+    // Service worker unavailable (e.g. during teardown) — drop this slice.
+  }
+}
 
 // --- Persistent info banner ---
 

@@ -121,11 +121,29 @@ async function getAnalytics() {
   return result.analytics || getDefaultAnalytics();
 }
 
-async function resetAnalytics() {
-  await chrome.storage.local.set({ analytics: getDefaultAnalytics() });
+// Analytics is a read-modify-write on a single storage key. Multiple unlocked
+// tabs report active-time slices concurrently, so serialize all mutations to
+// avoid lost updates. Errors are logged, not thrown, to protect callers.
+let analyticsChain = Promise.resolve();
+function queueAnalytics(fn) {
+  const result = analyticsChain.then(fn);
+  analyticsChain = result.catch((e) => {
+    console.warn("Analytics update failed:", e);
+  });
+  return analyticsChain;
 }
 
-async function updateAnalytics(deltas) {
+function resetAnalytics() {
+  return queueAnalytics(() =>
+    chrome.storage.local.set({ analytics: getDefaultAnalytics() })
+  );
+}
+
+function updateAnalytics(deltas) {
+  return queueAnalytics(() => applyAnalytics(deltas));
+}
+
+async function applyAnalytics(deltas) {
   const analytics = await getAnalytics();
   if (deltas.unlock) {
     // An unlock is ONE event regardless of how many sites it grants access to.
