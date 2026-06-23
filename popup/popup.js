@@ -524,10 +524,19 @@ function computeStreak(history) {
 document.getElementById("resetStatsBtn").addEventListener("click", () => {
   showConfirmDialog(
     "Reset stats?",
-    "This clears unlock, emergency, time, and site-change counters. Your writing history (exercises and words written) is kept. This can't be undone.",
+    "This clears unlock, emergency, time, and site-change counters. Your writing history — and the Exercises, Words, Streak, and Avg figures derived from it — is kept. This can't be undone.",
     async () => {
+      const btn = document.getElementById("resetStatsBtn");
+      btn.disabled = true;
       await chrome.runtime.sendMessage({ action: "resetAnalytics" });
-      loadStats();
+      // Refresh the views in place so there's no need to reopen the popup.
+      await loadStats();
+      await loadDashboard();
+      btn.textContent = "Stats reset ✓";
+      setTimeout(() => {
+        btn.textContent = "Reset Stats";
+        btn.disabled = false;
+      }, 1500);
     }
   );
 });
