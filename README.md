@@ -4,7 +4,7 @@ A Chrome extension that blocks social media sites and makes you complete a writi
 
 ## How It Works
 
-1. **Sites are blocked by default.** Navigate to any blocked site and you'll see a block screen instead.
+1. **The front door is blocked, deep links aren't.** Going to a blocked site's home page or feed — `x.com`, `x.com/home`, `youtube.com`, `youtube.com/feed/...`, `instagram.com/reels` — shows the block screen. A link to a *specific* post, video, or profile opens normally: that's something someone sent you, not a browsing session. Time on those visits is still tracked, and stepping from there into the feed hits the block screen.
 2. **Write to unlock.** To access a blocked site, complete a writing exercise — a random creative prompt with a word minimum you choose (50, 100, 200, 500, or 750 words).
 3. **One visit per period.** The day is split into four 6-hour windows (12am–6am, 6am–12pm, 12pm–6pm, 6pm–12am). You get one unlock per site per window. Close the tab or navigate away and it's blocked again until the next window.
 4. **Unlock-all mode (optional).** By default, you write one exercise per site. Turn on "Unlock all sites with one exercise" in settings, and a single writing exercise unlocks every blocked site for the current period. You still get only one visit per site — it just saves you from writing multiple exercises.
@@ -23,6 +23,7 @@ You can add or remove sites through the extension popup settings.
 - Configurable word minimum (50 / 100 / 200 / 500 / 750)
 - Custom site blocking — add any domain
 - Exit warning before leaving an unlocked site
+- Deep links pass through — the block screen guards the feed, not every URL on the domain
 - Writing history — every exercise is saved and viewable
 - Analytics dashboard — track unlocks, words written, and usage patterns
 - All data stored locally in your browser — nothing is sent anywhere
@@ -140,7 +141,7 @@ Cumulative analytics across all your usage:
 - **Words Written** and **Avg Words** — total and per-exercise averages
 - **Unlock Sessions** — how many times you unlocked access. One exercise counts as one session, even in unlock-all mode.
 - **Emergency Unlocks** — no-writing bypasses used
-- **Sites Unlocked** — how many times each site was unlocked (in unlock-all mode one session can grant several sites, so this total can exceed your session count)
+- **Sites Opened** — how many times you actually opened each site. In unlock-all mode, sites you were granted but never visited aren't counted. (Before Sep 2026 this counted every site an unlock-all exercise granted; those inflated per-site numbers were cleared once, and the section shows the date counting restarted.)
 - **Time Spent by Site** — *active* time on each site, counted only while the tab is visible and focused. Switching tabs, minimizing, focusing another app, or letting the machine sleep pauses the timer, so this reflects real usage rather than how long a tab sat open. Sites unlocked but never opened accrue no time.
 
 Exercises and words are read from your writing history, so they stay accurate. **Reset Stats** clears the unlock/emergency/time counters without touching your writing history.

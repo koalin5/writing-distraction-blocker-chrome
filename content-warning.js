@@ -15,6 +15,15 @@ chrome.runtime.onMessage.addListener((message) => {
     };
     showBanner();
     if (message.siteId) startActiveTracking(message.siteId);
+    // Only an unlocked visit warns on the way out — see the note below.
+    window.addEventListener("beforeunload", onBeforeUnload);
+  }
+
+  if (message.action === "initTracking") {
+    // Deep-link pass-through: the user followed a link to a specific post or
+    // video without unlocking the site. Count the time, but stay out of the
+    // way — no banner, no exit prompt, no visit spent.
+    startActiveTracking(message.siteId);
   }
 });
 
@@ -284,12 +293,12 @@ function showExitModal() {
 }
 
 // --- Fallback: browser beforeunload for tab close / URL bar / back button ---
+// Registered by "initWarning" only, so pass-through visits don't get a
+// "Leave site?" dialog they never asked for.
 
 function onBeforeUnload(e) {
   e.preventDefault();
   e.returnValue = "";
 }
-
-window.addEventListener("beforeunload", onBeforeUnload);
 
 }

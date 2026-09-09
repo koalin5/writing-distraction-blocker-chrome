@@ -20,6 +20,43 @@ function runRuleOp(fn) {
   return ruleOpChain;
 }
 
+// The "front door" of each site: the paths that are the endless scroll. These
+// are blocked along with the site root; anything deeper (a specific tweet,
+// video, post, or profile) is a link someone sent you, so it opens normally.
+// Keyed by site id — custom sites get root-only blocking.
+const FEED_PATHS = {
+  twitter:   ["home", "explore", "notifications", "messages", "search", "i/[^/]*"],
+  // shorts is the scroll even for a single video, so it stays behind the wall
+  youtube:   ["feed/[^/]*", "shorts(/[^/]*)?", "results"],
+  instagram: ["explore(/.*)?", "reels(/.*)?", "direct(/.*)?"],
+  facebook:  ["watch(/.*)?", "reels(/.*)?", "marketplace(/.*)?", "groups(/feed.*)?"],
+  linkedin:  ["feed(/.*)?", "mynetwork(/.*)?"],
+  tiktok:    ["foryou", "following", "explore(/.*)?"],
+  reddit:    ["r/[^/]+", "popular", "best", "hot", "new", "top"],
+  pinterest: ["ideas(/.*)?", "today(/.*)?"],
+  threads:   ["following", "activity(/.*)?"],
+  mastodon:  ["home", "explore(/.*)?", "notifications"],
+  bluesky:   ["feeds?(/.*)?", "notifications"],
+  discord:   ["channels(/.*)?", "app(/.*)?"],
+  twitch:    ["directory(/.*)?", "following(/.*)?"],
+  snapchat:  ["web(/.*)?"],
+};
+
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Matches the site root ("x.com", "x.com/", "x.com/?ref=…") and its feed paths,
+// and nothing deeper. Case-insensitive: declarativeNetRequest lower-cases the
+// URL unless isUrlFilterCaseSensitive is set.
+function buildFrontDoorRegex(site) {
+  const domains = [site.domain, ...(site.extraDomains || [])];
+  const hosts = domains.map(escapeRegex).join("|");
+  const feeds = FEED_PATHS[site.id] || [];
+  const feedPart = feeds.length ? `(/(${feeds.join("|")}))?` : "";
+  return `^https?://([a-z0-9_-]+\\.)*(${hosts})${feedPart}/?([?#].*)?$`;
+}
+
 function buildRulesForSite(site, index) {
   const rules = [];
   const baseId = RULE_ID_BASE + index * 10;
@@ -36,7 +73,10 @@ function buildRulesForSite(site, index) {
       }
     },
     condition: {
+      // requestDomains is a cheap pre-filter; the regex decides front door vs
+      // deep link.
       requestDomains: domains,
+      regexFilter: buildFrontDoorRegex(site),
       resourceTypes: ["main_frame"]
     }
   });
@@ -249,6 +289,29 @@ async function injectContentScripts(tabId) {
   }
 }
 
+// Deep-link pass-through: the user reached a blocked site without unlocking it
+// (only the front door is walled off). Track the time so the stats stay honest,
+// but skip the exit banner and the leave prompt — no visit is being spent.
+async function injectTimeTracking(tabId, siteId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content-warning.js", "content-nudge.js"],
+    });
+    chrome.tabs.sendMessage(tabId, { action: "initTracking", siteId });
+
+    const settings = await getSettings();
+    if (settings.nudgeMinutes > 0) {
+      chrome.tabs.sendMessage(tabId, {
+        action: "startNudgeTimer",
+        nudgeMinutes: settings.nudgeMinutes,
+      });
+    }
+  } catch {
+    // Tab may not be ready yet — we'll retry via onUpdated
+  }
+}
+
 // --- Visit Tracking ---
 
 async function handleSiteClose(siteId, unlockState) {
@@ -306,6 +369,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       if (site && urlMatchesSite(changeInfo.url, site)) {
         unlockState.unlockedSites[siteId] = { tabId, unlockedAt: info.unlockedAt };
         await saveUnlockState(unlockState);
+        // A site granted by unlock-all only counts as opened once it's visited.
+        await updateAnalytics({ opened: siteId });
         if (changeInfo.status === "complete" || !changeInfo.status) {
           injectContentScripts(tabId);
         }
@@ -333,6 +398,16 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     break;
   }
 
+  // A blocked site reached by deep link — no unlock, so nothing above claimed
+  // this tab. Track the time whenever the blocker is on duty.
+  if (changeInfo.status === "complete" && tab.url && isBlockingActiveNow(settings)) {
+    const site = settings.blockedSites.find(
+      s => s.enabled && urlMatchesSite(tab.url, s)
+    );
+    if (site && !unlockState.unlockedSites[site.id]) {
+      injectTimeTracking(tabId, site.id);
+    }
+  }
 });
 
 // --- Message Handling ---
@@ -394,14 +469,16 @@ async function handleMessage(message, sender) {
         unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
         await saveUnlockState(unlockState);
         if (grantedSites.length > 0) {
-          await updateAnalytics({ unlock: { siteId, sites: grantedSites } });
+          // One session for the exercise; the other granted sites are counted
+          // if and when they're actually opened.
+          await updateAnalytics({ unlock: true, opened: siteId });
         }
       } else {
         // Standard mode: unlock only the requested site
         unlockState.unlockedSites[siteId] = { tabId, unlockedAt: Date.now() };
         await saveUnlockState(unlockState);
         await removeSiteBlockingRule(siteId);
-        await updateAnalytics({ unlock: siteId });
+        await updateAnalytics({ unlock: true, opened: siteId });
       }
 
       return { success: true };
@@ -425,7 +502,7 @@ async function handleMessage(message, sender) {
       await saveEmergencyUnlocks(emergency);
 
       await removeSiteBlockingRule(siteId);
-      await updateAnalytics({ unlock: siteId, emergency: siteId });
+      await updateAnalytics({ unlock: true, opened: siteId, emergency: siteId });
 
       return { success: true };
     }
@@ -570,4 +647,5 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // Also ensure state when service worker wakes for any reason
+migrateAnalytics();
 ensurePeriodState().then(() => schedulePeriodAlarm());

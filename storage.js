@@ -29,8 +29,14 @@ const DEFAULT_SETTINGS = {
   blockedSites: DEFAULT_BLOCKED_SITES,
 };
 
+// Analytics schema version. Bumped when the meaning of a counter changes, so
+// stale numbers can be migrated instead of silently mixing with new ones.
+const ANALYTICS_SCHEMA = 2;
+
 function getDefaultAnalytics() {
   return {
+    statsSchema: ANALYTICS_SCHEMA,
+    siteOpensSince: Date.now(),
     totalUnlocks: 0,
     unlocksBySite: {},
     totalWritingExercises: 0,
@@ -139,6 +145,21 @@ function resetAnalytics() {
   );
 }
 
+// Schema 1 credited every site an unlock-all exercise granted, so per-site
+// counts included sites that were never opened. The real numbers can't be
+// recovered from that data, so clear the per-site counts once and start
+// counting actual opens from here. Session/word/time totals are unaffected.
+function migrateAnalytics() {
+  return queueAnalytics(async () => {
+    const analytics = await getAnalytics();
+    if (analytics.statsSchema === ANALYTICS_SCHEMA) return;
+    analytics.statsSchema = ANALYTICS_SCHEMA;
+    analytics.unlocksBySite = {};
+    analytics.siteOpensSince = Date.now();
+    await chrome.storage.local.set({ analytics });
+  });
+}
+
 function updateAnalytics(deltas) {
   return queueAnalytics(() => applyAnalytics(deltas));
 }
@@ -146,15 +167,15 @@ function updateAnalytics(deltas) {
 async function applyAnalytics(deltas) {
   const analytics = await getAnalytics();
   if (deltas.unlock) {
-    // An unlock is ONE event regardless of how many sites it grants access to.
-    // `deltas.unlock` is either a siteId string (single-site unlock) or an
-    // object { siteId, sites: [...] } (unlock-all grants many sites at once).
-    const u = deltas.unlock;
-    const sites = (typeof u === "object" && u.sites) ? u.sites : [typeof u === "object" ? u.siteId : u];
+    // One writing exercise is ONE unlock session, however many sites it grants
+    // access to. Which sites were actually visited is counted by `opened`.
     analytics.totalUnlocks++;
-    sites.forEach(s => {
-      analytics.unlocksBySite[s] = (analytics.unlocksBySite[s] || 0) + 1;
-    });
+  }
+  if (deltas.opened) {
+    // The user actually opened this site. In unlock-all mode the other granted
+    // sites stay uncounted until they're opened too — being allowed onto a site
+    // isn't the same as going there.
+    analytics.unlocksBySite[deltas.opened] = (analytics.unlocksBySite[deltas.opened] || 0) + 1;
   }
   if (deltas.writing) {
     analytics.totalWritingExercises++;

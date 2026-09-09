@@ -400,12 +400,18 @@ async function loadStats() {
 
   const entries = Object.entries(analytics.unlocksBySite || {}).sort((a, b) => b[1] - a[1]);
 
-  if (entries.length === 0) {
-    document.getElementById("siteStatsSection").style.display = "none";
-    return;
+  // Older versions counted every site an "unlock all" exercise granted, so those
+  // per-site numbers were cleared once. Say when the honest count started.
+  const hint = document.getElementById("siteStatsHint");
+  if (hint && analytics.siteOpensSince) {
+    const since = new Date(analytics.siteOpensSince)
+      .toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    hint.textContent = `How many times you actually opened each site — sites unlocked but never visited aren't counted. Tracked since ${since}.`;
   }
 
-  document.getElementById("siteStatsSection").style.display = "block";
+  // An empty list only hides this section — the sections below (time, emergency,
+  // disabled, removed) still render.
+  document.getElementById("siteStatsSection").style.display = entries.length ? "block" : "none";
   entries.forEach(([site, count]) => {
     const row = document.createElement("div");
     row.className = "site-stat-row";
